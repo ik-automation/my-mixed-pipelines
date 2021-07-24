@@ -1,6 +1,6 @@
 ---
 source: https://www.gitstart.com/post/automatic-deployment-of-react-native-ios-apps-with-fastlane-and-github-actions
-tags: ['github action', 'react native', 'fastlane']
+tags: ['github action', 'react native', 'fastlane', 'ios']
 ---
 
 on: push
@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v1
         with:
           name: sample.ipa
-          path: fastlane/builds/ 
+          path: fastlane/builds/

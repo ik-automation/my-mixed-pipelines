@@ -1,6 +1,6 @@
 ---
 source: https://github.com/ariya/hello-react-native/blob/master/.github/workflows/android.yml
-tags: ['github action', 'react native', 'fastlane']
+tags: ['github action', 'react native', 'fastlane' , 'ios']
 ---
 
 name: Dev Releases
@@ -62,4 +62,3 @@ jobs:
     - name: Build with Fastlane
       run: fastlane release_dev
       working-directory: ios
-      
