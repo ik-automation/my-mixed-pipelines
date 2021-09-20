@@ -1,0 +1,170 @@
+
+name: android.stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch from which to build the app
+        required: true
+        default: 'dev/*'
+
+env:
+  WORKING_DIRECTORY: android
+  ARTIFACT_NAME: artifact
+  NODE_VERSION: 14.x
+  JDK_VERSION: 1.8
+  ARTIFACT_REGEX: app/build/outputs/apk/release/*.apk
+  SIGNATURE_SHA256: "88:02:.........:22"
+  SLACK_FOOTER_SUCCESS: '🤖 ✅'
+  SLACK_FOOTER_FAIL: '🤖 ❌'
+  TODO: support ${{ secrets.SLACK_WEBHOOK }}
+  ENVIRONMENT: stage
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    outputs:
+      isSigned: ${{ steps.check_signature.outputs.isSigned }}
+      certOwner: ${{ steps.check_signature.outputs.certOwner }}
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.inputs.branch }}
+
+    - name: setup-jdk-${{ env.JDK_VERSION }}
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.JDK_VERSION }}
+
+    - name: cache-gradle
+      uses: actions/cache@v2
+      with:
+        path: ~/.gradle/caches
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: setup-nodejs-${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: cache-npm
+      uses: actions/cache@v2
+      with:
+        path: '~/.npm'
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - run: npm install
+
+    - name: prepare-signature
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        # secret encoded locally with command 'gpg -c --armor androidapp.jks'
+        echo "${{ secrets.ANDROID_RELEASE_CERTIFICATE_GPG }}" > androidapp.jks.asc
+        gpg -d --passphrase "${{ secrets.ANDROID_RELEASE_CERTIFICATE_GPG_PASSPHRASE }}" --batch androidapp.jks.asc > app/androidapp.jks
+
+    - name: build-android-apk-(.env.staging)
+      run: ./gradlew assembleRelease --build-cache
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      env:
+        ENVFILE: .env.staging
+        ANDROID_RELEASE_CERTIFICATE: androidapp.jks
+        ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    - name: validate-signature
+      id: check_signature
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        signature=$(keytool -printcert -jarfile ${{ env.ARTIFACT_REGEX }} | grep "SHA256:" -m 1 | head -1)
+        certOwner=$(keytool -printcert -jarfile ${{ env.ARTIFACT_REGEX }} | grep "Owner:" -m 1 | head -1)
+        if [[ $signature =~ "${{ env.SIGNATURE_SHA256 }}" ]]; then
+            echo "::set-output name=isSigned::✅"
+          else
+            echo "::set-output name=isSigned::❌"
+        fi
+        echo "::set-output name=certOwner::$certOwner"
+
+    - name: prepare-values
+      id: build_params
+      run: |
+        echo "::set-output name=CURRENT_DATE::$(date -u +'%Y-%m-%dT%H-%M')"
+        echo "::set-output name=CURRENT_BRANCH::$(echo $BRANCH | sed -e 's/\//__/g')"
+      env:
+        BRANCH: ${{ github.event.inputs.branch }}
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: android-${{ env.ENVIRONMENT }}-${{ env.CURRENT_BRANCH }}-${{ env.CURRENT_DATE }}.apk
+        path: ${{ env.WORKING_DIRECTORY }}/${{ env.ARTIFACT_REGEX }}
+        if-no-files-found: error
+      env:
+        CURRENT_DATE: ${{ steps.build_params.outputs.current_date }}
+        CURRENT_BRANCH: ${{ steps.build_params.outputs.current_branch }}
+
+    - name: send-notification-if-workflow-fails
+      uses: rtCamp/action-slack-notify@v2
+      if: ${{ failure() }}
+      env:
+        SLACK_WEBHOOK: ${{ env.SLACK_WEBHOOK }}
+        SLACK_ICON_EMOJI: ':ohno:'
+        SLACK_COLOR: '#B90E0A' # Crimson
+        SLACK_MESSAGE: |
+          The last build *${{ env.ENVIRONMENT }}* run for ${{github.repository}} and failed.
+          See <https://github.com/${{github.repository}}/actions/workflows/$GITHUB_WORKFLOW|here>
+        SLACK_FOOTER: ${{ env.SLACK_FOOTER_FAIL }}
+
+  notify:
+
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+
+      - name: success-slack-message
+        if: ${{ needs.build.outputs.isSigned == '✅' }}
+        run: |
+          SLACK_MESSAGE=$(cat << EOF
+          Environment: *${{ env.ENVIRONMENT }}*
+          Signed: ${{ needs.build.outputs.isSigned }}
+          Certificate Owner: ${{ needs.build.outputs.certOwner }}
+          Signature: ${{ env.SIGNATURE_SHA256 }}
+          Repository: <https://github.com/$GITHUB_REPOSITORY|$GITHUB_REPOSITORY>
+          *GitHub does not currently offer a REST API to retrieve uploaded artifacts.*
+          <https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID|Artifact URL ➡️>
+          EOF
+          )
+          echo "SLACK_MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$SLACK_MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: fail-slack-message
+        if: ${{ needs.build.outputs.isSigned == '❌' }}
+        run: |
+          SLACK_MESSAGE=$(cat << EOF
+          Environment: *${{ env.ENVIRONMENT }}*
+          Signed: ${{ needs.build.outputs.isSigned }}
+          Repository: <https://github.com/$GITHUB_REPOSITORY|$GITHUB_REPOSITORY>
+          *GitHub does not currently offer a REST API to retrieve uploaded artifacts.*
+          <https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID|Artifact URL ➡️>
+          EOF
+          )
+          echo "SLACK_MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$SLACK_MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+  # https://github.com/rtCamp/action-slack-notify
+      - name: success-slack-notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ env.SLACK_WEBHOOK }}
+          SLACK_USERNAME: android
+          SLACK_TITLE: android-${{ job.status }}
+          SLACK_MESSAGE: "${{ env.SLACK_MESSAGE }}"
+          SLACK_FOOTER: ${{ env.SLACK_FOOTER_SUCCESS }}
+          SLACK_COLOR: ${{ job.status }}

@@ -1,0 +1,138 @@
+# https://stackoverflow.com/questions/58817139/fastlane-how-to-pass-lane-context-to-another-lane
+# increment build, increment version, functions
+default_platform(:ios)
+
+before_all do |lane, options|
+  IPA_NAME = options[:ipa_name];
+  ENV["SLACK_URL"] = "slack_url";
+  ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
+end
+
+platform :ios do
+  lane :build_to_browserstack do |lane, options|
+    begin
+      build_app()
+      push_to_browserstack()
+    rescue => exception
+      error_do_all_operations(exception)
+    end
+  end
+end
+
+platform :ios do
+  lane :push_to_testflight do |lane, options|
+    begin
+      push_to_testflight_and_s3()
+      passed_do_all_operations()
+    rescue => exception
+      error_do_all_operations(exception)
+    end
+  end
+end
+
+def build_app
+  clean_build_artifacts
+  cert
+  sigh(
+    skip_install: true,
+    provisioning_name: 'name'
+  )
+  increment_version_number(
+    version_number: "1.22.3"
+  )
+  increment_build_number({
+    build_number: latest_testflight_build_number + 1
+  })
+  get_version_number(
+    target: ENV["SCHEME"]
+  )
+  get_build_number
+  gym(
+    scheme: ENV["SCHEME"],
+    export_options: {
+      provisioningProfiles: {
+        "com.com.com" => "profile"
+      }
+    },
+    output_name: IPA_NAME
+  )
+end
+
+def push_to_browserstack
+  upload_to_browserstack_app_automate(
+    browserstack_username: "name",
+    browserstack_access_key: "key",
+    file_path: ENV["PATH_TO_IPA"] + IPA_NAME,
+    custom_id: IPA_NAME
+  )
+end
+
+def push_to_testflight_and_s3
+  upload_to_testflight(
+    ipa: ENV["PATH_TO_IPA"] + IPA_NAME,
+    skip_submission: true,
+    skip_waiting_for_build_processing: true,
+    team_name: 'team'
+  )
+  aws_s3(
+    access_key: 'key',
+    secret_access_key: 'key',
+    bucket: 'bucket',
+    region: 'us-east-2',
+
+    ipa: ENV["PATH_TO_IPA"] + IPA_NAME,
+
+    path: 'path'
+  )
+end
+
+def passed_do_all_operations
+  slack(
+    message: "New iOS build was uploaded to TestFlight",
+    success: true,
+    channel: "#engineering_general",
+    slack_url: ENV["SLACK_URL"],
+    default_payloads: [:git_branch],
+    payload: {"Build Date" => Time.new.to_s,},
+    attachment_properties: {
+      fields: [
+        {
+          title: "Version number",
+          value: lane_context[SharedValues::VERSION_NUMBER],
+        },
+        {
+          title: "Build number",
+          value: lane_context[SharedValues::BUILD_NUMBER],
+        }
+      ]
+    }
+  )
+end
+
+def error_do_all_operations(exception)
+  slack(
+    message: "iOS build was not uploaded to TestFlight",
+    success: false,
+    channel: "#engineering_general",
+    slack_url: ENV["SLACK_URL"],
+    default_payloads: [:git_branch],
+    payload: {"Build Date" => Time.new.to_s,},
+    attachment_properties: {
+      fields: [
+      {
+        title: "Version number",
+        value: lane_context[SharedValues::VERSION_NUMBER],
+      },
+      {
+        title: "Build number",
+        value: lane_context[SharedValues::BUILD_NUMBER],
+      },
+      {
+        title: "Error message",
+        value: exception.to_s,
+        short: false
+      }
+      ]
+    }
+  )
+end

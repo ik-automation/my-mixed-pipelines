@@ -1,0 +1,136 @@
+
+---
+name: ios.fastlane.dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch from which to build the app
+        required: true
+        default: 'dev/*'
+
+env:
+  WORKING_DIRECTORY: ios
+  ARTIFACT_NAME: artifact
+  RUBY_VERSION: 2.7.0
+  NODE_VERSION: 14.16.x
+  SPACESHIP_ONLY_ALLOW_INTERACTIVE_2FA: true
+  APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+  APPLE_ID: ${{ secrets.APPLE_ID }}
+  FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+  TEAM_ID: ${{ secrets.TEAM_ID }}
+  GIT_SECRETS_REPO_URL: ${{ secrets.GIT_SECRETS_REPO_URL }}
+  GIT_SECRETS_BRANCH: ${{ secrets.GIT_SECRETS_BRANCH }}
+  KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+  MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+  MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+  SIGNATURE_TYPE: adhoc
+  SLACK_FOOTER_SUCCESS: '🍎 ✅'
+  SLACK_FOOTER_FAIL: '🍎 ❌'
+  ENVIRONMENT: dev
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: use node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: use ruby ${{ env.RUBY_VERSION }}
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+          ruby-version: ${{ env.RUBY_VERSION }}
+          working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: get yarn cache
+        id: yarn-cache-dir-path
+        run: |
+          echo "::set-output name=dir::$(yarn cache dir)"
+
+      - name: cache yarn
+        uses: actions/cache@v2
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        if: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: cache cocoapods
+        uses: actions/cache@v2
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: 'install dependencies && pod install'
+        if: success()
+        run: |
+          make setup-dependencies
+
+      - name: fastlane run
+        if: success()
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          bundle exec fastlane ios ios_ci_adhoc
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ios-${{ env.ENVIRONMENT }}-${{ env.SIGNATURE_TYPE }}-${{ env.CURRENT_BRANCH }}-${{ env.CURRENT_DATE }}.ipa
+          path: storage/
+
+      - name: send-notification-if-workflow-fails
+        uses: rtCamp/action-slack-notify@v2
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON_EMOJI: ':ohno:'
+          SLACK_COLOR: '#B90E0A' # Crimson
+          SLACK_MESSAGE: |
+            The last build *${{ env.ENVIRONMENT }}* run for ${{github.repository}} and failed.
+            See <https://github.com/${{github.repository}}/actions/workflows/${{github.action}}.yml|here>
+          SLACK_FOOTER: ${{ env.SLACK_FOOTER_FAIL }}
+
+  notify:
+
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+
+      - name: bake-slack-message
+        id: slack_message
+        run: |
+          SLACK_MESSAGE=$(cat << EOF
+          Environment: *${{ env.ENVIRONMENT }}*
+          Signed: *${{ env.SIGNATURE_TYPE }}* ✅
+          *GitHub does not currently offer a REST API to retrieve uploaded artifacts.*
+          <https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID|Artifact URL ➡️>
+          EOF
+          )
+          echo "SLACK_MESSAGE<<EOF" >> $GITHUB_ENV
+          echo "$SLACK_MESSAGE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+# https://github.com/rtCamp/action-slack-notify
+      - name: success-slack-notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USERNAME: android
+          SLACK_TITLE: ios-${{ job.status }}
+          SLACK_MESSAGE: "${{ env.SLACK_MESSAGE }}"
+          SLACK_FOOTER: ${{ env.SLACK_FOOTER_SUCCESS }}
+          SLACK_COLOR: ${{ job.status }}
