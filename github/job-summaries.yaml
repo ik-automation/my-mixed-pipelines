@@ -1,0 +1,27 @@
+    steps:
+    - name: Add markdown
+      run: |
+        echo "## :rocket: Pull Request Succesfully Deployed! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "14 Kubernetes Containers successfully updated with the [following binaries]()" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Useful Links" >> $GITHUB_STEP_SUMMARY
+        echo "- [Deployment Guide]()" >> $GITHUB_STEP_SUMMARY
+        echo "- [Deployment confidence dashboard]()" >> $GITHUB_STEP_SUMMARY
+        echo "- [Incoming Alerts]()" >> $GITHUB_STEP_SUMMARY
+        echo "- [On-Call Engineers]()" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "If things go :fire:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "|[:bangbang:  Rollback](https://github.com/)| [:pager:  Status]()|" >> $GITHUB_STEP_SUMMARY
+        echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+
+    - name: Adding markdown
+      run: |
+        echo "## Train pull request analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "|     Author(s)       |           Commits          |  Files Changed  | File Removed  |  Merge SHA |" >> $GITHUB_STEP_SUMMARY
+        echo "| ------------------- | -------------------------- | --------------- |---------------|--------------|" >> $GITHUB_STEP_SUMMARY
+        echo "|   @robherley        |              4             |     13          |       4       |   [3a70d5cad]()      |" >> $GITHUB_STEP_SUMMARY
+        echo "|   @pfleidi          |              3             |     2           |       8       |   [6d20562ae]()      |" >> $GITHUB_STEP_SUMMARY
+        echo "|   @konradpabjan     |              1             |     1           |       0       |   [dc4d0a278]()      |" >> $GITHUB_STEP_SUMMARY

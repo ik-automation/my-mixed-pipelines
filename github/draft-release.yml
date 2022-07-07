@@ -63,7 +63,7 @@ jobs:
       - name: Create a release
         uses: octokit/request-action@v2.x
         with:
-          route: POST /repos/${{ github.repository }}/releases
+          ro ute: POST /repos/${{ github.repository }}/releases
           draft: true
           name: ${{ steps.next-tag.outputs.tag }}
           tag_name: ${{ steps.next-tag.outputs.tag }}
