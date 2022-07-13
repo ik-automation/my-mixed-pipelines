@@ -1,0 +1,133 @@
+# gitlab ci template for terraform with webidentity role
+# https://docs.gitlab.com/ee/ci/cloud_services/aws/ for how to setup gitlab oidc in aws.
+#
+# assuming it is a monorepo with vpc/dev and vpc/prod
+# assuming AWS_IAM_ROLE_DEV and AWS_IAM_ROLE_PROD with role arn as values configured in the CI/CD settings
+#
+# setup step is to setup working dir and pass role arn
+# validate step is to validate terraform
+# terraform plan step runs on any other branch except in main
+# terraform apply step runs only on main branch
+
+stages:
+  - setup
+  - validate
+  - authenticate
+  - plan
+  - deploy
+
+variables:
+  WORKING_DIR: "vpc/**/*"
+
+setup-dev:
+  stage: setup
+  variables:
+    WORKING_DIR: "vpc/dev"
+    ROLE_ARN: ${AWS_IAM_ROLE_DEV}
+  script:
+    - echo WORKING_DIR="$WORKING_DIR" >> setup.env
+    - echo ROLE_ARN="$ROLE_ARN" >> setup.env
+  artifacts:
+    reports:
+      dotenv: setup.env
+  only:
+    changes:
+      - $WORKING_DIR/**/*
+      - .gitlab-ci.yml
+
+setup-prod:
+  stage: setup
+  variables:
+    WORKING_DIR: "vpc/prod"
+    ROLE_ARN: ${AWS_IAM_ROLE_PROD}
+  script:
+    - echo WORKING_DIR="$WORKING_DIR" >> setup.env
+    - echo ROLE_ARN="$ROLE_ARN" >> setup.env
+  artifacts:
+    reports:
+      dotenv: setup.env
+  only:
+    changes:
+      - $WORKING_DIR/**/*
+
+validate:
+  stage: validate
+  image:
+    name: hashicorp/terraform:latest
+    entrypoint: [""]
+  script:
+    - echo WORKING_DIR="$WORKING_DIR" >> validate.env
+    - echo ROLE_ARN="$ROLE_ARN" >> validate.env
+    - terraform -chdir=$WORKING_DIR init -backend=false
+    - terraform -chdir=$WORKING_DIR validate
+  artifacts:
+    reports:
+      dotenv: validate.env
+
+authenticate:
+  stage: authenticate
+  image:
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  script:
+    - aws --version
+    - >
+      STS=($(aws sts assume-role-with-web-identity
+      --role-arn ${ROLE_ARN}
+      --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
+      --web-identity-token $CI_JOB_JWT_V2
+      --duration-seconds 3600
+      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+      --output text))
+    - echo GITLAB_AWS_ACCESS_KEY_ID="${STS[0]}" >> authenticate.env
+    - echo GITLAB_AWS_SECRET_ACCESS_KEY="${STS[1]}" >> authenticate.env
+    - echo GITLAB_AWS_SESSION_TOKEN="${STS[2]}" >> authenticate.env
+    - echo GITLAB_AWS_DEFAULT_REGION="eu-west-1" >> authenticate.env
+    - echo WORKING_DIR="$WORKING_DIR" >> authenticate.env
+  needs:
+    - job: validate
+      artifacts: true
+  artifacts:
+    reports:
+      dotenv: authenticate.env
+  allow_failure: false
+
+plan:
+  stage: plan
+  image:
+    name: hashicorp/terraform:latest
+    entrypoint: [""]
+  script:
+    - export AWS_ACCESS_KEY_ID=$GITLAB_AWS_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$GITLAB_AWS_SECRET_ACCESS_KEY
+    - export AWS_SESSION_TOKEN=$GITLAB_AWS_SESSION_TOKEN
+    - export AWS_DEFAULT_REGION=$GITLAB_AWS_DEFAULT_REGION
+    - terraform -chdir=$WORKING_DIR init
+    - terraform -chdir=$WORKING_DIR plan
+  needs:
+    - job: authenticate
+      artifacts: true
+  allow_failure: false
+  except:
+    refs:
+      - main
+
+deploy:
+  stage: deploy
+  image:
+    name: hashicorp/terraform:latest
+    entrypoint: [""]
+  script:
+    - export AWS_ACCESS_KEY_ID=$GITLAB_AWS_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$GITLAB_AWS_SECRET_ACCESS_KEY
+    - export AWS_SESSION_TOKEN=$GITLAB_AWS_SESSION_TOKEN
+    - export AWS_DEFAULT_REGION=$GITLAB_AWS_DEFAULT_REGION
+    - terraform -chdir=$WORKING_DIR init
+    - terraform -chdir=$WORKING_DIR apply -auto-approve
+  needs:
+    - job: authenticate
+      artifacts: true
+  allow_failure: false
+  only:
+    refs:
+      - main
