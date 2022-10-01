@@ -1,0 +1,29 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Verify/Load-Performance-Testing.gitlab-ci.yml
+
+# Read more about the feature here: https://docs.gitlab.com/ee/user/project/merge_requests/load_performance_testing.html
+
+stages:
+  - build
+  - test
+  - deploy
+  - performance
+
+load_performance:
+  stage: performance
+  image: docker:git
+  variables:
+    K6_IMAGE: loadimpact/k6
+    K6_VERSION: 0.27.0
+    K6_TEST_FILE: github.com/loadimpact/k6/samples/http_get.js
+    K6_OPTIONS: ''
+    K6_DOCKER_OPTIONS: ''
+  services:
+    - docker:stable-dind
+  script:
+    - docker run --rm -v "$(pwd)":/k6 -w /k6 $K6_DOCKER_OPTIONS $K6_IMAGE:$K6_VERSION run $K6_TEST_FILE --summary-export=load-performance.json $K6_OPTIONS
+  artifacts:
+    reports:
+      load_performance: load-performance.json

@@ -1,0 +1,36 @@
+# https://gitlab.com/gitlab-org/quality/pipeline-common/-/blob/master/ci/danger-review.yml
+include:
+  - local: ci/rules.gitlab-ci.yml
+
+# See https://gitlab.com/gitlab-org/ruby/gems/gitlab-dangerfiles
+
+# This job supports the following variables:
+# - DANGER_GITLAB_API_TOKEN: (Optional) A project access token with `api` scope.
+# - GITLAB_DANGERFILES_VERSION: (Optional) Version requirement for `gitlab-dangerfiles`. Latest version if empty.
+danger-review:
+  extends: .rules:mr
+  image: ruby:3.0
+  stage: test
+  needs: []
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - api_failure
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  before_script:
+    - '[[ ! -f "Gemfile" ]] && bundle init && bundle add gitlab-dangerfiles --version "$GITLAB_DANGERFILES_VERSION"'
+    - '[[ ! -f "Gemfile.lock" ]] || bundle config set --local frozen "true"'
+    - bundle install
+  script:
+    - >
+      if [ -z "$DANGER_GITLAB_API_TOKEN" ]; then
+        # Force danger to skip CI source GitLab and fallback to "local only git repo".
+        unset GITLAB_CI
+        # We need to base SHA to help danger determine the base commit for this shallow clone.
+        bundle exec danger dry_run --fail-on-errors=true --verbose --base="$CI_MERGE_REQUEST_DIFF_BASE_SHA" --head="${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA:-$CI_COMMIT_SHA}"
+      else
+        danger_id=$(echo -n ${DANGER_GITLAB_API_TOKEN} | md5sum | awk '{print $1}' | cut -c5-10)
+        bundle exec danger --fail-on-errors=true --verbose --danger_id=${danger_id}
+      fi
