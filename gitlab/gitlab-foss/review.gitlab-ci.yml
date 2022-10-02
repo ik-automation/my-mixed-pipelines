@@ -1,0 +1,107 @@
+include:
+  - remote: 'https://gitlab.com/gitlab-org/modelops/applied-ml/review-recommender/ci-templates/-/raw/v0.2.1/recommender/Reviewers.gitlab-ci.yml'
+
+review-cleanup:
+  extends:
+    - .default-retry
+    - .review:rules:review-cleanup
+  image: ${REVIEW_APPS_IMAGE}
+  resource_group: review/${CI_COMMIT_REF_SLUG}${SCHEDULE_TYPE} # CI_ENVIRONMENT_SLUG is not available here and we want this to be the same as the environment
+  stage: prepare
+  environment:
+    name: review/${CI_COMMIT_REF_SLUG}${SCHEDULE_TYPE} # No separator for SCHEDULE_TYPE so it's compatible as before and looks nice without it
+    action: stop
+  before_script:
+    - source scripts/utils.sh
+    - source scripts/review_apps/review-apps.sh
+    - source scripts/review_apps/gcp_cleanup.sh
+    - install_gitlab_gem
+    - setup_gcp_dependencies
+  script:
+    - delete_release
+    - delete_namespace
+    - ruby -rrubygems scripts/review_apps/automated_cleanup.rb
+    - gcp_cleanup
+
+start-review-app-pipeline:
+  extends:
+    - .review:rules:start-review-app-pipeline
+  resource_group: review/${CI_COMMIT_REF_SLUG}${SCHEDULE_TYPE} # CI_ENVIRONMENT_SLUG is not available here and we want this to be the same as the environment
+  stage: review
+  needs:
+    - job: e2e-test-pipeline-generate
+    - job: build-assets-image
+      artifacts: false
+  # These variables are set in the pipeline schedules.
+  # They need to be explicitly passed on to the child pipeline.
+  # https://docs.gitlab.com/ee/ci/pipelines/multi_project_pipelines.html#pass-cicd-variables-to-a-downstream-pipeline-by-using-the-variables-keyword
+  variables:
+    SCHEDULE_TYPE: $SCHEDULE_TYPE
+    DAST_RUN: $DAST_RUN
+    SKIP_MESSAGE: Skipping review-app due to mr containing only quarantine changes!
+  trigger:
+    strategy: depend
+    include:
+      - artifact: review-app-pipeline.yml
+        job: e2e-test-pipeline-generate
+
+# Fetch child pipeline test results and store in parent pipeline
+# workaround until natively implemented: https://gitlab.com/groups/gitlab-org/-/epics/8205
+review-app-test-results:
+  image: ${REGISTRY_HOST}/${REGISTRY_GROUP}/gitlab-build-images/debian-bullseye-ruby-${RUBY_VERSION}:bundler-2.3
+  stage: review
+  extends:
+    - .qa-cache
+    - .review:rules:start-review-app-pipeline
+  needs:
+    - start-review-app-pipeline
+  variables:
+    COLORIZED_LOGS: "true"
+    QA_LOG_LEVEL: "debug"
+  before_script:
+    - cd qa && bundle install
+  script:
+    - bundle exec rake "ci:download_test_results[start-review-app-pipeline,e2e-test-report,${CI_PROJECT_DIR}]"
+  when: always
+  allow_failure: true
+  artifacts:
+    when: always
+    reports:
+      junit: qa/tmp/rspec-*.xml
+
+danger-review:
+  extends:
+    - .default-retry
+    - .danger-review-cache
+    - .review:rules:danger
+  stage: test
+  needs: []
+  before_script:
+    - source scripts/utils.sh
+    - bundle_install_script "--with danger"
+    - run_timed_command "retry yarn install --frozen-lockfile"
+  script:
+    # ${DANGER_DANGERFILE} is used by Jihulab for customizing danger support: https://jihulab.com/gitlab-cn/gitlab/-/blob/main-jh/jh/.gitlab-ci.yml
+    - >
+      if [ -z "$DANGER_GITLAB_API_TOKEN" ]; then
+        run_timed_command danger_as_local
+      else
+        danger_id=$(echo -n ${DANGER_GITLAB_API_TOKEN} | md5sum | awk '{print $1}' | cut -c5-10)
+        run_timed_command "bundle exec danger --fail-on-errors=true --verbose --danger_id=\"${danger_id}\" --dangerfile=\"${DANGER_DANGERFILE:-Dangerfile}\""
+      fi
+
+danger-review-local:
+  extends:
+    - danger-review
+    - .review:rules:danger-local
+  script:
+    - run_timed_command danger_as_local
+
+reviewers-recommender:
+  extends:
+    - .default-retry
+  # extends generated values cannot overwrite values from included files
+  # Use !reference as a workaround here
+  rules: !reference [".review:rules:reviewers-recommender", rules]
+  stage: test
+  needs: []

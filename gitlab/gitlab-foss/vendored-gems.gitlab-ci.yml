@@ -1,0 +1,87 @@
+vendor mail-smtp_pool:
+  extends:
+    - .vendor:rules:mail-smtp_pool
+  needs: []
+  trigger:
+    include: vendor/gems/mail-smtp_pool/.gitlab-ci.yml
+    strategy: depend
+
+vendor microsoft_graph_mailer:
+  extends:
+    - .vendor:rules:microsoft_graph_mailer
+  needs: []
+  trigger:
+    include: vendor/gems/microsoft_graph_mailer/.gitlab-ci.yml
+    strategy: depend
+
+vendor ipynbdiff:
+  extends:
+    - .vendor:rules:ipynbdiff
+  needs: []
+  trigger:
+    include: vendor/gems/ipynbdiff/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth-azure-oauth2:
+  extends:
+    - .vendor:rules:omniauth-azure-oauth2
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth-azure-oauth2/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth-cas3:
+  extends:
+    - .vendor:rules:omniauth-cas3
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth-cas3/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth_crowd:
+  extends:
+    - .vendor:rules:omniauth_crowd
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth_crowd/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth-gitlab:
+  extends:
+    - .vendor:rules:omniauth-gitlab
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth-gitlab/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth-google-oauth2:
+  extends:
+    - .vendor:rules:omniauth-google-oauth2
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth-google-oauth2/.gitlab-ci.yml
+    strategy: depend
+
+vendor omniauth-salesforce:
+  extends:
+    - .vendor:rules:omniauth-salesforce
+  needs: []
+  trigger:
+    include: vendor/gems/omniauth-salesforce/.gitlab-ci.yml
+    strategy: depend
+
+vendor devise-pbkdf2-encryptable:
+  extends:
+    - .vendor:rules:devise-pbkdf2-encryptable
+  needs: []
+  trigger:
+    include: vendor/gems/devise-pbkdf2-encryptable/.gitlab-ci.yml
+    strategy: depend
+
+vendor bundler-checksum:
+  extends:
+    - .vendor:rules:bundler-checksum
+  needs: []
+  trigger:
+    include: vendor/gems/bundler-checksum/.gitlab-ci.yml
+    strategy: depend

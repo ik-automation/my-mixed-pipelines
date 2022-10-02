@@ -1,0 +1,151 @@
+include:
+  - template: Jobs/Code-Quality.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml
+  - template: Jobs/License-Scanning.gitlab-ci.yml
+
+code_quality:
+  extends:
+    - .default-retry
+    - .use-docker-in-docker
+  stage: lint
+  artifacts:
+    paths:
+      - gl-code-quality-report.json  # GitLab-specific
+  # extends generated values cannot overwrite values from included files
+  # Use !reference as a workaround here
+  rules: !reference [".reports:rules:code_quality", rules]
+  allow_failure: true
+
+.sast-analyzer:
+  # We need to re-`extends` from `sast` as the `extends` here overrides the one from the template.
+  extends:
+    - .default-retry
+    - sast
+  stage: lint
+  needs: []
+  artifacts:
+    paths:
+      - gl-sast-report.json  # GitLab-specific
+    expire_in: 1 week  # GitLab-specific
+  variables:
+    SAST_BRAKEMAN_LEVEL: 2  # GitLab-specific
+    SAST_EXCLUDED_PATHS: "qa, spec, doc, ee/spec, config/gitlab.yml.example, tmp"  # GitLab-specific
+    SAST_EXCLUDED_ANALYZERS: bandit, flawfinder, phpcs-security-audit, pmd-apex, security-code-scan, spotbugs, eslint, nodejs-scan
+
+brakeman-sast:
+  rules: !reference [".reports:rules:brakeman-sast", rules]
+
+semgrep-sast:
+  rules: !reference [".reports:rules:semgrep-sast", rules]
+
+gosec-sast:
+  variables:
+    GOPATH: "$CI_PROJECT_DIR/vendor/go"
+    COMPILE: "false"
+    GOSEC_GO_PKG_PATH: "$CI_PROJECT_DIR"
+    SECURE_LOG_LEVEL: "debug"
+  before_script:
+    - mkdir -p $GOPATH
+    - cd workhorse
+    - go get -d ./...
+    - cd ..
+  cache:
+    paths:
+      - vendor/go
+  rules: !reference [".reports:rules:gosec-sast", rules]
+
+.secret-analyzer:
+  extends: .default-retry
+  stage: lint
+  needs: []
+  artifacts:
+    paths:
+      - gl-secret-detection-report.json  # GitLab-specific
+    expire_in: 1 week  # GitLab-specific
+
+secret_detection:
+  rules: !reference [".reports:rules:secret_detection", rules]
+
+.ds-analyzer:
+  # We need to re-`extends` from `dependency_scanning` as the `extends` here overrides the one from the template.
+  extends:
+    - .default-retry
+    - dependency_scanning
+  stage: lint
+  needs: []
+  variables:
+    DS_EXCLUDED_PATHS: "qa/qa/ee/fixtures/secure_premade_reports, spec, ee/spec, tmp"  # GitLab-specific
+    DS_EXCLUDED_ANALYZERS: "gemnasium-maven"
+  artifacts:
+    paths:
+      - gl-dependency-scanning-report.json  # GitLab-specific
+    expire_in: 1 week  # GitLab-specific
+
+gemnasium-dependency_scanning:
+  variables:
+    DS_REMEDIATE: "false"
+  rules: !reference [".reports:rules:gemnasium-dependency_scanning", rules]
+
+gemnasium-python-dependency_scanning:
+  rules: !reference [".reports:rules:gemnasium-python-dependency_scanning", rules]
+
+yarn-audit-dependency_scanning:
+  extends: .ds-analyzer
+  image: "${REGISTRY_HOST}/${REGISTRY_GROUP}/security-products/analyzers/npm-audit:1"
+  variables:
+    TOOL: yarn
+  rules: !reference [".reports:rules:yarn-audit-dependency_scanning", rules]
+
+# Analyze dependencies for malicious behavior
+# See https://gitlab.com/gitlab-com/gl-security/security-research/package-hunter
+.package_hunter-base:
+  extends: .default-retry
+  stage: test
+  image:
+    name: ${REGISTRY_HOST}/${REGISTRY_GROUP}/security-products/package-hunter-cli:v1.3.2@sha256:7529deaef9ea21aab56bfb74ae1abbc121311affdb6ece49ce7b1c360f997ca2
+    entrypoint: [""]
+  variables:
+    HTR_user: '$PACKAGE_HUNTER_USER'
+    HTR_pass: '$PACKAGE_HUNTER_PASS'
+  needs: []
+  allow_failure: true
+  before_script:
+    - rm -r spec locale .git app/assets/images doc/
+    - cd .. && tar -I "gzip --best" -cf gitlab.tgz gitlab/
+  script:
+    - DEBUG=* node /usr/src/app/cli.js analyze --format gitlab --manager ${PACKAGE_MANAGER} gitlab.tgz | tee ${CI_PROJECT_DIR}/gl-dependency-scanning-report.json
+  after_script:
+    - mkdir ~/.aws
+    - '[[ -z "${AWS_SIEM_REPORT_INGESTION_CREDENTIALS_FILE}" ]] || mv "${AWS_SIEM_REPORT_INGESTION_CREDENTIALS_FILE}" ~/.aws/credentials'
+    - npm install --no-save --ignore-scripts @aws-sdk/client-s3@3.49.0
+    - scripts/ingest-reports-to-siem
+  artifacts:
+    paths:
+      - gl-dependency-scanning-report.json
+    reports:
+      dependency_scanning: gl-dependency-scanning-report.json
+    expire_in: 1 week
+
+package_hunter-yarn:
+  extends:
+    - .package_hunter-base
+    - .reports:rules:package_hunter-yarn
+  variables:
+    PACKAGE_MANAGER: yarn
+
+package_hunter-bundler:
+  extends:
+    - .package_hunter-base
+    - .reports:rules:package_hunter-bundler
+  variables:
+    PACKAGE_MANAGER: bundler
+
+license_scanning:
+  extends: .default-retry
+  stage: lint
+  needs: []
+  artifacts:
+    expire_in: 1 week  # GitLab-specific
+  rules: !reference [".reports:rules:license_scanning", rules]
