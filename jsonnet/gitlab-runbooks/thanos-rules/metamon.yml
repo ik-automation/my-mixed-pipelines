@@ -1,0 +1,26 @@
+groups:
+- name: SnitchHeartBeat
+  interval: 1m
+  partial_response_strategy: abort
+  rules:
+  - alert: SnitchHeartBeat
+    expr: vector(1)
+    labels:
+      # Fake env for routing to the correct snitch token.
+      env: thanos-rule
+      severity: s4
+      alert_type: heartbeat
+    annotations:
+      runbook: docs/monitoring/prometheus-snitch.md
+      title: SnitchHeartBeat
+  - alert: SnitchHeartBeat
+    # Fires as long as there are no notification failures on any alertmanager.
+    expr: sum(increase(alertmanager_notifications_failed_total{integration="pagerduty"}[1h])) == bool 0 > 0
+    labels:
+      # Fake env for routing to the correct snitch token.
+      env: alertmanager-notifications
+      severity: s4
+      alert_type: heartbeat
+    annotations:
+      runbook: docs/monitoring/alertmanager-notification-failures.md
+      title: SnitchHeartBeat

@@ -1,0 +1,49 @@
+{{ define "gitlab.title" }}
+    {{- if .GroupLabels.type -}}
+        {{- printf "%s - Service %s" (.Status | title) .GroupLabels.type -}}
+    {{- else -}}
+        {{- printf "%s - %s" (.Status | title) .CommonAnnotations.title -}}
+    {{- end -}}
+{{ end }}
+
+{{ define "gitlab.text" }}
+    {{- if eq .Status "firing" -}}
+        {{- printf ":fire: Alerts :fire:\n" -}}
+
+        {{- range .Alerts -}}
+            {{- if .GeneratorURL -}}
+                {{- printf "*<%s|%s>*" .GeneratorURL .Labels.alertname -}}
+            {{- else -}}
+                {{- printf "*%s*" .Labels.alertname -}}
+            {{- end -}}
+
+            {{- if .Annotations.promql_template_1 -}}
+                {{- printf " :point_right: <https://thanos.gitlab.net/graph?g0.expr=%s|Thanos Graph>\n" (.Annotations.promql_template_1 | urlquery) -}}
+            {{- else -}}
+                {{- printf "\n" -}}
+            {{- end -}}
+
+            {{- printf "%s\n\n" .Annotations.title -}}
+            {{- printf "%s\n\n" .Annotations.description -}}
+        {{- end -}}
+
+        {{- if gt (len .CommonLabels) 0 -}}
+            {{- $removeLabels := stringSlice "alert_class" "environment" "feature_category" "pager" "monitor" "rules_domain" "severity" "slo_alert" "user_impacting" -}}
+            {{- $filteredLabels := .CommonLabels.Remove $removeLabels -}}
+
+            {{- printf "\n:label: Labels :label:\n" -}}
+
+            {{- range $filteredLabels.SortedPairs -}}
+                {{- printf "*%s*: %s\n" (.Name | title) .Value -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+{{ end }}
+
+{{ define "gitlab.runbook.link" }}
+  {{- if eq .CommonAnnotations.link "" -}}
+    https://ops.gitlab.net/gitlab-com/runbooks/blob/master/{{ .CommonAnnotations.runbook -}}
+  {{- else -}}
+    {{- .CommonAnnotations.link -}}
+  {{- end -}}
+{{- end }}

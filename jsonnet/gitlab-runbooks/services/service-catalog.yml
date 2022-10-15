@@ -1,0 +1,3909 @@
+tiers:
+  - name: sv
+  - name: lb
+  - name: stor
+  - name: db
+  - name: inf
+
+services:
+  - name: api
+    friendly_name: GitLab API
+    tier: sv
+    teams:
+      - create
+      - distribution_deploy
+      - geo
+      - gitaly
+      - manage
+      - plan
+    label: Service:API
+    business:
+      requirement: |
+        API is required to allow developing tools (i.e. bots) that makes use of GitLab.com data,
+        otherwise the only way to develop such tools is to parse and/or interact with HTML pages,
+        which is far from ideal and unstable as structure can be changed between releases.
+      customers:
+        - GitLab.com customers
+        - Internally used for push/pull operations
+        - Internally used for CI/CD interactions
+      business_value: |
+        Allows GitLab.com customers to interact with GitLab.com programmatically
+        through a uniform interface
+      SLA:
+        overall_sla_weighting: 5  # If this exists, this service will be included in the overall SLA, using this value as a weighted average
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-ce
+        - https://gitlab.com/gitlab-org/gitlab-ee
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/tree/master/api-k8s-migration
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/api
+        developer_guide: https://docs.gitlab.com/ee/development/api_styleguide.html
+        service:
+          - https://docs.gitlab.com/ce/api/
+          - https://docs.gitlab.com/ee/api/
+        security:
+      dependencies:
+        - service: consul
+        - service: postgres
+        - service: gitaly
+        - service: redis
+      configurations:
+        - location: /srv/gitlab/config
+          name: webservice
+        - location: /srv/gitlab/config
+          name: workhorse-config.toml
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/37946
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/51690
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/53072
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/54334
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/54857
+          - https://gitlab.com/gitlab-org/gitlab-ce/issues/54865
+      logging:
+        - name: Rails
+          permalink: https://log.gprd.gitlab.net/goto/f61f543b668c26f2dcdb8a0eb06e2edb
+        - name: Workhorse
+          permalink: https://log.gprd.gitlab.net/goto/66979d90ca195652b7a4d10d22ca2db7
+        - name: Kubernetes
+          permalink: https://log.gprd.gitlab.net/goto/88eab835042a07b213b8c7f24213d5bf
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/api
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        primary_grafana_dashboard: api-main/api-overview
+        sentry_slug: gitlab/gitlabcom/?query=program%3A%22rails%22
+
+  - name: blackbox
+    tier: inf
+    friendly_name: Blackbox Exporters
+    label: Service:Blackbox
+    business:
+      requirement: |
+        We need a service that's capabale of pinging multiple endpoints over different protocols
+        (HTTPS, SSH) and reporting the result of such pings to drive custom alerts when certain
+        conditions are met.
+      customers:
+        - Internally used for monitoring endpoints
+      business_value: |
+        It probes several endpoints periodically, the results of which is used to
+        trigger alerts about other services being down or being slow to respond.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-cookbooks/gitlab-exporters
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://github.com/prometheus/blackbox_exporter/blob/master/README.md
+        security:
+      dependencies:
+        - service: prometheus
+      configurations:
+        - config_name: blackbox_exporter.yml
+          location: /opt/prometheus/blackbox_exporter/blackbox_exporter.yml
+      chef_roles:
+        - gstg-base-blackbox
+        - gprd-base-blackbox
+      scalability:
+        bound: network
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/b4618f79f80f44cb21a32623a275a0e6
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+
+  - name: camoproxy
+    tier: sv
+    friendly_name: Camoproxy
+    label: Service:Camoproxy
+    business:
+      requirement: Camo is an SSL image proxy to prevent mixed content warnings on
+        secure pages.
+      customers:
+        - GitLab.com customers
+      business_value: Prevents insecure user content on TLS-encrypted pages, by proxying
+        the content through the camoproxy.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/cactus/go-camo
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-helmfiles/-/tree/master/releases/camoproxy/charts
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/camoproxy
+        developer_guide: https://docs.gitlab.com/ee/security/asset_proxy.html
+        service:
+        security:
+      dependencies:
+      configurations:
+      chef_roles:
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Camoproxy
+          permalink: https://log.gprd.gitlab.net/goto/f86d35a17e46e0de9d8454b3a5d4387f
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: camoproxy-main/camoproxy-overview
+
+  - name: console
+    tier: sv
+    friendly_name: Console Access
+    label: Service:Console
+    business:
+      requirement: |
+        - Restricted access to the primary DB console
+        - Restricted access to a secondary DB console
+        - Restricted access to the Geo DB console
+        - Restricted access to a Rails console
+      customers:
+        - GitLab Engineering Team
+      business_value: |
+        It allows the engineering team to run DB queries and/or Rails commands
+        against production and/or staging without giving them full access an
+        infrastructure host. It is also used by the SRE team to run maintenance scripts
+        that could potentially use a lot of memory and/or CPU, so a production worker
+        isn't starved of its resources.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-cookbooks/gitlab_users
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+        security:
+      dependencies:
+        - service: postgres
+        - service: gitaly
+        - service: redis
+      configurations:
+        - config_name: 99-db-console-access
+          location: /etc/sudoers.d/99-db-console-access
+        - config_name: 99-db-console-primary-access
+          location: /etc/sudoers.d/99-db-console-primary-access
+        - config_name: 99-db-console-geo-access
+          location: /etc/sudoers.d/99-db-console-geo-access
+        - config_name: 99-rails-console-access
+          location: /etc/sudoers.d/99-rails-console-access
+        - config_name: .irbrc
+          location: /var/opt/gitlab/.irbrc
+      chef_roles:
+        - gprd-base-console-node
+        - gstg-base-console-node
+      scalability:
+        bound: memory, cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: history
+        # Logs are sent to Stackdriver currently are lacking a tag, so we can't come up with a permalink
+        # Progress is being tracked in https://gitlab.com/gitlab-com/gl-infra/reliability/-/issues/6051
+        - permalink:
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        sentry_slug: gitlab/gitlabcom/?query=program%3A%22rails%22
+
+  - name: consul
+    tier: inf
+    friendly_name: Consul
+    label: Service:Consul
+    business:
+      requirement: |
+        In order to correctly point pgbouncer to a DB master after a failover occurs, we needed
+        a solution that can do so in an automated fashion. Among different service
+        discovery solutions, we chose Consul.
+      customers:
+        - Internally used by the Patroni cluster to manage leader election and to
+          share common configurations
+        - Internally used by WAL-G to do basebackup on one slave node in the Patroni
+          cluster
+        - Internally usable by all other infrastructure nodes within a single environment
+      business_value: |
+        Consul is feature-rich and easy to use. Beside being used by Patroni, it can be used by the Rails application
+        to discover healthy DB replicas. Combined with service discovery, its DNS feature is being considered to be
+        used in a dedicated pgbouncer cluster instead of the old approach of using Consul watchers.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/hashicorp/consul
+      slx:
+      documents:
+        design:
+        architecture: https://www.consul.io/docs/internals/architecture.html
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/merge_requests/80
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/consul
+        developer_guide:
+        service:
+          - https://github.com/hashicorp/consul/blob/master/README.md
+        security: https://www.consul.io/docs/internals/security.html
+      dependencies:
+      configurations:
+        - config_name: Consul server
+          location: /etc/consul/consul.json
+      chef_roles:
+        - gstg-infra-consul
+        - gprd-infra-consul
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Consul
+          permalink: https://log.gprd.gitlab.net/goto/7f15b1f04a0f09fbb18fc62adefe3ed1
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/a22fbb60e45a3f6d7860908a5427301c
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        primary_grafana_dashboard: a988f2tmz/consul
+        sentry_slug:
+
+  - name: contributors
+    tier: sv
+    friendly_name: contributors.gitlab.com
+    teams:
+      - verify  # The service is maintained by Matija Čupić who is part of the Verify team
+    label: Service:Contributors
+    business:
+      requirement: It allows giving credits to GitLab CE contributors.
+      customers:
+        - Available publicly
+      business_value: It is considered a nice interface to show contributors stats.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/gitlab-contributors
+      slx:
+      documents:
+        design: https://github.com/rails/rails-contributors/blob/master/doc/design.md
+        architecture:
+        readiness_review:
+        service:
+          - https://gitlab.com/gitlab-com/gitlab-contributors/blob/master/README.md
+        security:
+      dependencies:
+      configurations:
+        - config_name: NGINX
+          location: /etc/nginx/sites-available/contributors
+      chef_roles:
+        - contributors-gitlab-com
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: green
+        security_incidents:
+      logging:
+        - name: Rails
+          permalink: /home/contributors/app/log/production.log
+    infrastructure:
+      provider: do
+      architecture:
+      provisioning: manual
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        primary_grafana_dashboard:
+        sentry_slug:
+
+  - name: errortracking
+    tier: sv
+    friendly_name: ErrorTracking
+    teams:
+      - observability
+    label: Service:ErrorTracking
+    business:
+      requirement: |
+        This service allows customers to connect their projects to a GitLab managed Sentry clone so that they can view errors for their application.
+      customers:
+        - GitLab.com customers
+      SLA:
+        overall_sal_weighting:
+        availability:
+        response_time:
+      business_value: |
+        Customers can view error events in GitLab and connect those errors to GitLab issues.
+    technical:
+      documents:
+        architecture: https://gitlab.com/gitlab-org/opstrace/runbooks/#architecture
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/tree/master/library/database/clickhouse
+      logging:
+        - name: Rails
+          permalink: None
+    infrastructure:
+      provider: gcp
+
+  - name: customersdot
+    tier: sv
+    friendly_name: CustomersDot
+    teams:
+      - fulfillment
+    label: Service:Customersdot
+    business:
+      requirement: |
+        This service is needed so that GitLab.com customers can buy licenses to be able to utilize GitLab.com EE-level features.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Customers Dot allows customers to buy and upgrade subscriptions by adding more seats and add/edit payment records. It also manages self-managed licenses and has an admin interface.
+      SLA:
+        overall_sal_weighting:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/customers-gitlab-com
+      slx:
+      documents:
+        design:
+        architecture: https://gitlab.com/gitlab-org/customers-gitlab-com/-/blob/main/doc/architecture/index.md
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/customersdot
+        developer_guide: https://docs.gitlab.com/ee/development/product_qualified_lead_guide/#hand-raise-flow-on-customersdot
+        service:
+          - https://gitlab.com/gitlab-org/customers-gitlab-com/-/tree/main/doc
+        security:
+      dependencies:
+      logging:
+        - name: Rails
+          permalink: https://console.cloud.google.com/logs/query;query=resource.type%3D%22gce_instance%22%0Alog_name%3D%22projects%2Fgitlab-subscriptions-prod%2Flogs%2Frails.production%22;cursorTimestamp=2022-06-08T08:35:26.081Z?referrer=search&project=gitlab-subscriptions-prod
+        - name: Sidekiq
+          permalink: https://console.cloud.google.com/logs/query;query=resource.type%3D%22gce_instance%22%0Alog_name%3D%22projects%2Fgitlab-subscriptions-prod%2Flogs%2Fsidekiq.production%22;cursorTimestamp=2022-06-08T08:34:39.368440702Z?referrer=search&project=gitlab-subscriptions-prod/
+    infrastructure:
+      provider: gcp
+      architecture: https://gitlab.com/gitlab-org/customers-gitlab-com/blob/main/doc/architecture/index.md
+      provisioning: terraform
+      accesses:
+        - account_name:  # User or system account that has access to the service components in the infra provider
+          access_type:   # Level of access
+          reviewed:      # Is it reviewed and approved?
+    operations:
+      maintenance:  # Link to maintenance procedures document
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/gl-infra/customersdot-ansible
+    observability:
+      monitors:
+        sentry_slug: gitlab/customersgitlabcom/
+        primary_grafana_dashboard: customersdot-main/customersdot-overview
+
+  - name: forum
+    tier: sv
+    friendly_name: forum.gitlab.com
+    teams:
+      - support
+    label: forum.gitlab.com
+    business:
+      requirement: |
+        We want to provide a way for our community to discuss about GitLab and ask questions.
+      customers:
+        - Community
+      business_value: |
+        Public Community Forum for GitLab users to discuss about anything GitLab related. It is run by Community members, whereas the hosting is graciously donated by GitLab using Discourse.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/issues/8
+        service:
+          - https://github.com/discourse/discourse_docker
+        security:
+      dependencies:
+      configurations:
+        - config_name: discourse
+          location: /var/discourse/containers/app.yml
+      chef_roles:
+      scalability:
+        note: One-off Singleton running in a docker container.
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: production.log
+          permalink: /var/discourse/shared/standalone/log/rails
+    infrastructure:
+      provider: DO
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/forum/discourse-forum.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard: bd2Kl9Imk/host-stats?orgId=1&var-environment=ops&var-node=forum.gitlab.com
+        sentry_slug:
+
+  - name: kube
+    tier: inf
+    friendly_name: Kubernetes
+    label: Service:Kubernetes
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/gitlab-com-infrastructure
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/common
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-helmfiles/
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/tanka-deployments
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/kube
+        developer_guide:
+        service:
+        security:
+      logging:
+        - name: Stackdriver
+          permalink: https://cloudlogging.app.goo.gl/81mKjkvq3BfTUwRN9
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/kube/
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: kube
+        primary_grafana_dashboard: kube-main/kube-overview
+
+  - name: logging
+    tier: inf
+    friendly_name: Logging
+    label: Service:Logging
+    business:
+      requirement: We are required to keep logs, both on legal terms as well as for
+        debugging production issues
+      customers:
+        - infrastructure, security, engineering
+      business_value: Without logging we might not be able to comply with legal requirements
+        and are unable to debug production issues.
+      SLA:
+        availability:
+        response_time: 'Elastic Support SLA: L1 - 4 business hours, L2 - 1 business
+          day, L3 - 2 business days'
+    technical:
+      project:
+      slx:
+      documents:
+        design: https://gitlab.com/gitlab-com/www-gitlab-com/-/merge_requests/23545
+        architecture: https://gitlab.com/gitlab-com/runbooks/raw/master/img/logging-infr.png
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/es-logging-cluster/index.md
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/logging
+        developer_guide: https://docs.gitlab.com/ee/development/logging.html#gitlab-developers-guide-to-logging
+        service:
+          - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+          - https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/es-logging-cluster/index.md
+        security:
+      dependencies:
+        - service:
+      sub_components:
+        - fluentd
+        - google-pubsub-topics
+        - pubsubbeat
+        - stackdriver
+        - stackdriver-exporter
+        - elk
+      configurations:
+        - config_name: td-agent/fluentd main configuration
+          location: /etc/td-agent/td-agent.conf
+        - config_name: td-agent transformation, filter and plugin configuration
+          location: /etc/td-agent/conf.d/*
+        - config_name: Google PubSub topic configuration
+          location: https://console.cloud.google.com/cloudpubsub/topicList?project=gitlab-production
+        - config_name: Stackdriver log ingestion
+          location: https://console.cloud.google.com/logs/usage?project=gitlab-production
+        - config_name: stackdriver exporter config
+          location: https://gitlab.com/gitlab-cookbooks/gitlab-exporters/blob/master/attributes/stackdriver_exporter.rb#L8
+        - config_name: stackdriver scrape config on Prometheus
+          location: /opt/prometheus/prometheus/inventory/stackdriver.yml
+        - config_name: ELK managed objects
+          location: https://gitlab.com/gitlab-com/runbooks/-/tree/master/elastic%2Fmanaged-objects
+      chef_roles:
+        - gprd-base
+        - gstg-base
+        - ops-base
+        - dr-base
+        - gprd-infra-pubsub
+        - gstg-infra-pubsub
+        - ops-infra-pubsub
+        - dr-infra-pubsub
+        - dr-infra-sd-exporter
+        - gprd-infra-sd-exporter
+        - gstg-infra-sd-exporter
+        - ops-infra-sd-exporter
+      scalability:
+        note: We run fluentd for logs on each host; Google PubSub topics and stackdriver
+          are cloud services; We can only sensibly scale out pubsubbeats. ELK can
+          be scaled horizontally.
+        bound: cpu, memory, storage
+        scalable: vertical, horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Kibana
+          permalink: https://log.gprd.gitlab.net/app/kibana
+        - name: Stackdriver
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production
+        - name: elastic stack monitoring
+          permalink: https://00a4ef3362214c44a044feaa539b4686.us-central1.gcp.cloud.es.io:9243/app/monitoring#/home?_g=(cluster_uuid:RM2uqM76TnWT3JL5n5NzCw)
+    infrastructure:
+      provider: gcp, elastic.io
+      architecture: https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+      provisioning: terraform
+      accesses:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+        - https://gitlab.com/gitlab-com/runbooks/-/tree/master/elastic%2Fdoc
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard:
+
+  - name: nginx
+    friendly_name: NGINX
+    tier: sv
+    teams:
+      - distribution_deploy
+    label: Service:NGINX
+    business:
+      requirement: |
+        Proxies requests to help protect puma against specific network attacks.
+      customers:
+        - GitLab.com customers
+      business_value: Puma thread abuse protection
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/omnibus-gitlab
+        - https://gitlab.com/gitlab-org/charts/gitlab/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/nginx
+        developer_guide:
+        service:
+        security:
+      dependencies:
+      configurations:
+        - location: /etc/nginx/
+          name: NGINX Ingress
+        - location: /var/opt/gitlab/nginx/conf
+          name: Omnibus installed NGINX
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Kubernetes
+          permalink: https://log.gprd.gitlab.net/goto/88eab835042a07b213b8c7f24213d5bf
+        - name: Error Logs
+          permalink: https://cloudlogging.app.goo.gl/neeqq5jQEKWsxZRx8
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard:
+
+  - name: search
+    tier: inf
+    friendly_name: Global Search
+    label: Service:Elasticsearch
+    business:
+      requirement: Repository index and search with Elasticsearch.
+      customers:
+        - create
+        - manage
+        - plan
+      business_value: Repository index and search with Elasticsearch.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/search
+        developer_guide: https://docs.gitlab.com/ee/development/elasticsearch.html
+        service: []
+        security:
+      dependencies:
+        - service:
+      sub_components:
+        - elasticsearch
+      configurations: []
+      chef_roles: []
+      scalability:
+        note:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: elastic stack monitoring
+          permalink: https://00a4ef3362214c44a044feaa539b4686.us-central1.gcp.cloud.es.io:9243/app/monitoring#/overview?_g=(cluster_uuid:D31oWYIkTUWCDPHigrPwHg)
+    infrastructure:
+      provider: elastic.io
+      architecture:
+      provisioning:
+      accesses:
+    operations:
+      maintenance:
+      runbooks: []
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard:
+
+  - name: web
+    tier: sv
+    friendly_name: GitLab.com Web
+    teams:
+      - create
+      - distribution_deploy
+      - geo
+      - gitaly
+      - manage
+      - plan
+    label: Service:Web
+    business:
+      requirement: |
+        Web is required as the main destination of GitLab.com, through which users collaborate
+        on their code, discuss issues, and many more.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Allows GitLab.com customers to interact with GitLab.com through web-based interface.
+      SLA:
+        overall_sla_weighting: 5  # If this exists, this service will be included in the overall SLA, using this value as a weighted average
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-ce
+        - https://gitlab.com/gitlab-org/gitlab-ee
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/web
+        developer_guide: https://docs.gitlab.com/ee/development/architecture.html
+        service:
+          - https://docs.gitlab.com/ce/
+          - https://docs.gitlab.com/ee/
+        security:
+      dependencies:
+        - service: consul
+        - service: postgres
+        - service: gitaly
+        - service: redis
+      configurations:
+        - location: /srv/gitlab/config
+          name: webservice
+        - location: /srv/gitlab/config
+          name: workhorse-config.toml
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Rails
+          permalink: https://log.gprd.gitlab.net/goto/15b83f5a97e93af2496072d4aa53105f
+        - name: Workhorse
+          permalink: https://log.gprd.gitlab.net/goto/464bddf849abfd4ca28494a04bad3ead
+        - name: Kubernetes
+          permalink: https://log.gprd.gitlab.net/goto/88eab835042a07b213b8c7f24213d5bf
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        sentry_slug: gitlab/gitlabcom/?query=program%3A%22rails%22
+        primary_grafana_dashboard: web-main/web-overview
+        gitlab_dashboard: https://ops.gitlab.net/gitlab-com/metrics-dogfooding/-/environments/266/metrics?dashboard=.gitlab%2Fdashboards%2Fkey_service_web.yml&duration_seconds=10800
+
+  - name: frontend
+    tier: lb
+    friendly_name: HAProxy Frontend
+    label: Service:HAProxy
+    business:
+      requirement: |
+        Load balancers offered by cloud providers has limited configurations and doesn't
+        allow for lots of flexible setups, hence we use HAProxy to avoid those shortcomings.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        HAProxy is invisible to customers but it provides us high levels of operational flexibility,
+        like rate limiting, blocking access based on different criteria, ease of removing backend from
+        balancing pools for maintenance, customizable logging, and many more.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-cookbooks/gitlab-haproxy
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#infra-current-archi-diagram
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/frontend
+        developer_guide: https://docs.gitlab.com/ee/development/fe_guide/#frontend-development-guidelines
+        service:
+          - https://cbonte.github.io/haproxy-dconv/1.7/intro.html
+        security:
+      dependencies:
+        - service: api
+        - service: git
+        - service: web
+      configurations:
+        - config_name: haproxy.cfg
+          location: /etc/haproxy/haproxy.cfg
+      chef_roles:
+        - gprd-base-lb-fe
+        - gstg-base-lb-fe
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: haproxy
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production&organizationId=769164969568&interval=PT1H&resource=gce_instance%2Finstance_id%2F1812745190666049211&scrollTimestamp=2019-01-22T15:27:18.915253748Z&advancedFilter=resource.type%3D%22gce_instance%22%0Alabels.tag%3D%22haproxy%22
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance: https://gitlab.com/gitlab-com/runbooks/blob/master/docs/frontend/haproxy.md
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/frontend/haproxy-1.md
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: N9YSt6Siz
+        primary_grafana_dashboard: frontend-main/frontend-overview
+
+  - name: google-cloud-storage
+    tier: inf
+    friendly_name: Google Cloud Storage
+    label: Service:GoogleCloudStorage
+    infrastructure:
+      provider: gcp
+    technical:
+      documents:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/google-cloud-storage
+        developer_guide: https://docs.gitlab.com/ee/administration/object_storage.html
+      logging:
+        - name: Admin Activity
+          permalink: https://cloudlogging.app.goo.gl/Htfsfyye1PeAfc1r6
+        - name: Data Access
+          permalink: https://cloudlogging.app.goo.gl/fSJgyQ1k1Fupsqb1A
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard:
+
+  - name: git
+    tier: sv
+    friendly_name: Git Access
+    teams:
+      - create
+      - distribution_deploy
+      - geo
+      - gitaly
+      - manage
+      - plan
+    label: Service:Git
+    business:
+      requirement: |
+        Serves git operation requests over SSH and HTTP. The specific git operations handled are git-upload-pack (pushing), git-receive-pack (pulling), git-upload-archive (creating an archive of a tree), and git-lfs-authenticate (LFS authentication). git-upload-pack is also used in git-ls-remote.
+      customers:
+        - GitLab.com customers
+        - GitLab Employees
+      business_value: This is the standard way of working with and managing remote
+        repositories.
+      SLA:
+        overall_sla_weighting: 5  # If this exists, this service will be included in the overall SLA, using this value as a weighted average
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-shell  # SSH
+        - https://gitlab.com/gitlab-org/gitlab-workhorse  # HTTP
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#infra-current-archi-diagram
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/git
+        developer_guide: https://docs.gitlab.com/ee/topics/git/#git
+        service:
+          - https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        security:
+      dependencies:
+        - service: consul
+        - service: gitaly
+        - service: postgres
+        - service: redis
+      configurations:
+        - config_name: gitlab.rb
+          location: /etc/gitlab/gitlab.rb
+        - config_name: gitlab-shell
+          location: /var/opt/gitlab/gitlab-shel/config.yml
+        - config_name: gitlab-workhorse
+          location: /var/opt/gitlab/gitlab-workhorse/config.toml
+      chef_roles:
+        - gprd-base-fe-git
+        - gstg-base-fe-git
+      scalability:
+        bound: network
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Rails
+          permalink: https://log.gprd.gitlab.net/goto/b368513b02f183a06d28c2a958b00602
+        - name: Workhorse
+          permalink: https://log.gprd.gitlab.net/goto/3ddd4ee7141ba2ec1a8b3bb0cb1476fe
+        - name: Puma
+          permalink: https://log.gprd.gitlab.net/goto/a2601cff0b6f000339e05cdb9deab58b
+        - name: nginx
+          permalink: https://log.gprd.gitlab.net/goto/8a5fb5820ec7c8daebf719c51fa00ce0
+        - name: Unstructured Rails
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production&interval=PT1H&resource=gce_instance&advancedFilter=jsonPayload.hostname%3A%22git%22%0Alabels.tag%3D%22unstructured.production%22&customFacets=labels.%22compute.googleapis.com%2Fresource_name%22
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/bd680ccb3c21567e47a821bbf52a7c09
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/git/git.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/git/git-stuck-processes.md
+      error_budget:
+    observability:
+      monitors:
+        sentry_slug: gitlab/gitlabcom/?query=program%3A%22rails%22
+        primary_grafana_dashboard: git-main/git-overview
+
+  - name: gitaly
+    tier: stor
+    friendly_name: Gitaly
+    teams:
+      - gitaly
+    label: Service:Gitaly
+    business:
+      requirement: |
+        It is needed to eliminate the latencies of doing git operations
+        over NFS, and to avoid bringing GitLab.com down when one of the
+        NFS nodes is down.
+      customers:
+        - Internally used by GitLab workers
+      business_value: |
+        It considerably faster than using git-over-NFS, allows for better
+        visibility over git operations, and could be expanded to support caching
+        and HA.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitaly
+      slx:
+      documents:
+        design: https://gitlab.com/gitlab-org/gitaly/blob/master/doc/DESIGN.md
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/gitaly
+        developer_guide: https://docs.gitlab.com/ee/development/gitaly.html#gitaly-developers-guide
+        service:
+          - https://gitlab.com/gitlab-org/gitaly/blob/master/README.md
+        security:
+      dependencies:
+        - service: gitaly
+        - service: frontend  # through gitlab-shell
+        - service: redis  # through gitlab-shell
+      configurations:
+        - config_name: Gitaly config
+          location: /var/opt/gitlab/gitaly/config.toml
+        - config_name: gitlab-shell config
+          location: /var/opt/gitlab/gitlab-shell/config.yml
+      chef_roles:
+        - gstg-base-stor-gitaly
+        - gprd-base-stor-gitaly
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Gitaly
+          permalink: https://log.gprd.gitlab.net/goto/4f0bd7f08b264e7de970bb0cc9530f9d
+        - name: gitlab-shell
+          permalink: https://log.gprd.gitlab.net/goto/ba97a9597863f0df1c3b894b44eb1db6
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/7cfb513706cffc0789ad0842674e108a
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-down.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-pubsub.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-latency.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/troubleshooting/gitaly-high-cpu.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-error-rate.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-rate-limiting.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-unusual-activity.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/version/gitaly-version-mismatch.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-profiling.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gracefully-restart-gitaly-ruby.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-debugging-tool.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        sentry_slug: gitlab/gitaly-production
+        grafana_folder: SRXyrrSmk
+        primary_grafana_dashboard: gitaly-main/gitaly-overview
+
+  - name: influxdb
+    tier: inf
+    friendly_name: InfluxDB (deprecated)
+    label: Service:Influxdb
+    business:
+      requirement: |
+        Until the Rails application is fully migrated to export Prometheus metrics,
+        we still need InfluxDB to consume metrics from the application parts that still
+        emit InfluxDB metrics.
+      customers:
+        - Internally by dashboards.gitlab.net
+      business_value: |
+        It receives application metrics that provide useful insights about GitLab.com transactions
+        like durations, method calls, etc...
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/influxdata/influxdb
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://github.com/influxdata/influxdb/blob/master/README.md
+        security: https://docs.influxdata.com/influxdb/v1.7/administration/security/
+      dependencies:
+      configurations:
+        - config_name: InfluxDB
+          location: /etc/influxdb/influxdb.conf
+      chef_roles:
+        - gstg-influxdb
+        - gprd-influxdb
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: green
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/bf44358a81c549827fd8142a4da59d4a
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/influxdb/manage-influxdb.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        primary_grafana_dashboard:
+        sentry_slug:
+
+  - name: praefect
+    tier: stor
+    friendly_name: Praefect
+    teams:
+      - gitaly
+    label: Service:Praefect
+    business:
+      requirement: |
+        Enable HA in Gitaly through replication
+      customers:
+        - Internally used by GitLab workers
+      business_value: |
+        Allow High Availability for repository storage on GitLab
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitaly
+      slx:
+      documents:
+        design: https://gitlab.com/gitlab-org/gitaly/blob/master/doc/design_ha.md
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/praefect
+        developer_guide: https://docs.gitlab.com/ee/development/gitaly.html#gitaly-developers-guide
+        readiness_review:
+        service:
+          - https://gitlab.com/gitlab-org/gitaly/blob/master/README.md
+        security:
+      dependencies:
+        - service: gitaly
+      configurations:
+        - config_name: Praefect config
+          location: /var/opt/gitlab/praefect/config.toml
+      chef_roles:
+        - gstg-base-be-praefect
+        - gprd-base-be-praefect
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/769b1e96dc189470332cd7005dd6f878
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/praefect/praefect-startup.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/praefect/praefect-error-rate.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        sentry_slug: gitlab/praefect-production
+        grafana_folder: SRXyrrSmk
+        primary_grafana_dashboard: praefect-main/praefect-overview
+
+  - name: pvs
+    tier: inf
+    friendly_name: Pipeline Validation Service
+    teams:
+      - trust_and_safety
+    label: Service:PVS
+    business:
+      requirement: |
+        Performs pipeline validation
+      customers:
+        - Internal
+      business_value: |
+        Validates pipelines
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/gl-security/security-operations/trust-and-safety/pipeline-validation-service
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/issues/17
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/pvs
+        developer_guide: https://docs.gitlab.com/ee/administration/external_pipeline_validation.html
+        service:
+        security:
+      dependencies:
+      configurations:
+      chef_roles:
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: stackdriver
+          permalink: https://cloudlogging.app.goo.gl/mLPtczm9LrLekYcw5
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: cloudrun
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: pvs
+        primary_grafana_dashboard: pvs-main/pvs-overview
+
+  - name: mailroom
+    tier: sv
+    friendly_name: Mailroom Incoming Mail Service
+    teams:
+      - create
+      - distribution_deploy
+      - geo
+      - gitaly
+      - manage
+      - plan
+    label: Service:Mailroom
+    business:
+      requirement: It is needed to allow responding to issues/MR through email replies.
+      customers:
+        - GitLab.com customers
+      business_value: It is convenient to users to respond to issues/MRs through email
+        replies.
+
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/tpitale/mail_room
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/mailroom/overview.md
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/mailroom
+        developer_guide: https://docs.gitlab.com/ee/development/emails.html#mailroom-gem-updates
+        service:
+          - https://github.com/tpitale/mail_room/blob/master/README.md
+        security:
+      dependencies:
+        - service: redis
+      configurations:
+        - config_name: MailRoom
+          location: /var/opt/gitlab/mail_room.yml
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/0ce3bf67abafcfc0f81f3d6e7a066912
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        primary_grafana_dashboard: mailroom-main/mailroom-overview
+        sentry_slug:
+
+  - name: web-pages
+    tier: sv
+    friendly_name: GitLab Pages
+    label: Service:Pages
+    business:
+      requirement: |
+        It allows publishing static web sites in a few minutes, with the ability to set
+        custom domain(s) and TLS certificates.
+      customers:
+        - GitLab.com customers
+        - Internally for sites like docs.gitlab.com and design.gitlab.com
+      business_value: |
+        It allows hosting static websites on GitLab.com for free, which can be an incentive
+        for new users to join and use GitLab.com.
+      SLA:
+        overall_sla_weighting: 0  # Treated as a primary service, but with a zero weight for now
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-pages
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/web-pages
+        developer_guide: https://docs.gitlab.com/ee/development/pages/
+        service:
+          - https://gitlab.com/gitlab-org/gitlab-pages/blob/master/README.md
+        security:
+      dependencies:
+      configurations:
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: green
+        security_incidents:
+      logging:
+        - name: Pages
+          permalink: https://log.gprd.gitlab.net/goto/00a732029c1448a741c8730c04038fd9
+        - name: haproxy
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production&interval=PT1H&resource=gce_instance&customFacets=labels.%22compute.googleapis.com%2Fresource_name%22&advancedFilter=labels.tag%3D%22haproxy%22%0Alabels.%22compute.googleapis.com%2Fresource_name%22%3A%22fe-pages-%22
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3384c89c5a828db866d2fa8ec86cd97f
+        - name: Kubernetes
+          permalink: https://log.gprd.gitlab.net/goto/f12db328608ead73063861ce1a53822b
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pages/gitlab-pages.md
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: web-pages
+        primary_grafana_dashboard: web-pages-main/web-pages-overview
+
+  - name: pgbouncer
+    tier: db
+    friendly_name: PGBouncer Primary Database Pool
+    label: Service:pgbouncer
+    business:
+      requirement: We use PgBouncer as the connection pooler for PostgreSQL
+      customers:
+        - GitLab.com customers
+      business_value: |
+        It allows pooling and reusing server connections to reduce the number of database conections.
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/pgbouncer/pgbouncer
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/pgbouncer
+        developer_guide:
+        service:
+          - https://pgbouncer.github.io/features.html
+        security:
+      dependencies:
+        - service: postgres
+      configurations:  # A service might have one or more configs
+        - config_name: pgbouncer.ini
+          location: /var/opt/gitlab/pgbouncer/pgbouncer.ini
+      chef_roles:
+        - gprd-base-db-pgbouncer-common
+        - gprd-base-db-pgbouncer
+        - gstg-base-db-pgbouncer-common
+        - gstg-base-db-pgbouncer
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: pgbouncer
+          permalink: https://log.gprd.gitlab.net/goto/3fb9391e5ef07b47aac2fce6fda175d9
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/ae311f6f133cc1c45b62541977081043
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:  # User or system account that has access to the service components in the infra provider
+          access_type:   # Level of access
+          reviewed:      # Is it reviewed and approved?
+    operations:
+      maintenance:  # Link to maintenance procedures document
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer-1.md
+
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: pgbouncer
+        primary_grafana_dashboard: pgbouncer-main/pgbouncer-overview
+
+  - name: pgbouncer-registry
+    tier: db
+    friendly_name: Registry PGBouncer Primary Database Pool
+    label: Service:pgbouncer
+    business:
+      requirement: We use PgBouncer as the connection pooler for PostgreSQL
+      customers:
+        - GitLab.com customers
+      business_value: |
+        It allows pooling and reusing server connections to reduce the number of database conections.
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/pgbouncer/pgbouncer
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/pgbouncer-registry
+        developer_guide:
+        readiness_review:
+        service:
+          - https://pgbouncer.github.io/features.html
+        security:
+      dependencies:
+        - service: postgres
+      configurations:  # A service might have one or more configs
+        - config_name: pgbouncer.ini
+          location: /var/opt/gitlab/pgbouncer/pgbouncer.ini
+      chef_roles:
+        - gprd-base-db-pgbouncer-common
+        - gprd-base-db-pgbouncer
+        - gprd-base-db-pgbouncer-registry
+        - gstg-base-db-pgbouncer-common
+        - gstg-base-db-pgbouncer
+        - gstg-base-db-pgbouncer-registry
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: pgbouncer
+          permalink: https://log.gprd.gitlab.net/goto/3fb9391e5ef07b47aac2fce6fda175d9
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/ae311f6f133cc1c45b62541977081043
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:  # User or system account that has access to the service components in the infra provider
+          access_type:   # Level of access
+          reviewed:      # Is it reviewed and approved?
+    operations:
+      maintenance:  # Link to maintenance procedures document
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer-1.md
+
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: pgbouncer-registry
+        primary_grafana_dashboard: pgbouncer-main/pgbouncer-overview
+
+  - name: pgbouncer-ci
+    tier: db
+    friendly_name: CI PGBouncer Primary Database Pool
+    label: Service:pgbouncer
+    business:
+      requirement: We use PgBouncer as the connection pooler for PostgreSQL
+      customers:
+        - GitLab.com customers
+      business_value: |
+        It allows pooling and reusing server connections to reduce the number of database conections.
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/pgbouncer/pgbouncer
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/pgbouncer-ci
+        developer_guide:
+        service:
+          - https://pgbouncer.github.io/features.html
+        security:
+      dependencies:
+        - service: postgres
+      configurations:  # A service might have one or more configs
+        - config_name: pgbouncer.ini
+          location: /var/opt/gitlab/pgbouncer/pgbouncer.ini
+      chef_roles:
+        - gprd-base-db-pgbouncer-common
+        - gprd-base-db-pgbouncer
+        - gprd-base-db-pgbouncer-ci
+        - gstg-base-db-pgbouncer-common
+        - gstg-base-db-pgbouncer
+        - gstg-base-db-pgbouncer-ci
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: pgbouncer
+          permalink: https://log.gprd.gitlab.net/goto/3fb9391e5ef07b47aac2fce6fda175d9
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/ae311f6f133cc1c45b62541977081043
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:  # User or system account that has access to the service components in the infra provider
+          access_type:   # Level of access
+          reviewed:      # Is it reviewed and approved?
+    operations:
+      maintenance:  # Link to maintenance procedures document
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pgbouncer/pgbouncer-1.md
+
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: pgbouncer-ci
+        primary_grafana_dashboard: pgbouncer-main/pgbouncer-overview
+
+  - name: patroni
+    tier: db
+    friendly_name: Postgres (Patroni)
+    label: Service:Postgres
+    business:
+      requirement: We use Postgres as our backend database.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        PostgreSQL is a powerful, open source object-relational database system
+        that uses and extends the SQL language combined with many features
+        that safely store and scale the most complicated data workloads.
+        We use Patroni as the high-availability solution, PGBouncer as the pooling solution, and WAL-G as the backup solution.
+
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/postgres/postgres
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/patroni
+        developer_guide:
+        service:
+          - https://www.postgresql.org/docs/9.6/index.html
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+        - service: consul
+      components:
+        - patroni
+      configurations:
+        - config_name: postgresql.conf
+          location: /var/opt/gitlab/postgresql/postgresql.conf
+        - config_name: pg_ident.conf
+          location: /var/opt/gitlab/postgresql/pg_ident.conf
+        - config_name: pg_hba.conf
+          location: /var/opt/gitlab/postgresql/pg_hba.conf
+        - config_name: postgresql.auto.conf
+          location: /var/opt/gitlab/postgresql/postgresql.auto.conf
+        - config_name: patroni.yml
+          location: /var/opt/gitlab/patroni/patroni.yml
+      chef_roles:
+        - gstg-base-db-patroni
+        - gprd-base-db-patroni
+      scalability:
+        bound: cpu, memory, disk
+        scalable: horizontal or vertical. We can horizontally scale by adding more
+          read only replicas to serve read oprations. However, for serving read/write
+          operations we may need to scale vertically.
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Postgres
+          permalink: https://log.gprd.gitlab.net/goto/d0f8993486c9007a69d85e3a08f1ea7c
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3669d551a595a3a5cf1e9318b74e6c22
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgres.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-backups-wale-walg.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/patroni-management.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/pg-ha.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-disk-space.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-rebuild-trigram-indexes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-replica.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/postgresql-switchover.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: RNfEDpLmz
+        primary_grafana_dashboard: patroni-main/patroni-overview
+
+  - name: patroni-registry
+    tier: db
+    friendly_name: Registry Postgres (Patroni)
+    label: Service:Postgres
+    business:
+      requirement: We use Postgres as our backend database.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        PostgreSQL is a powerful, open source object-relational database system
+        that uses and extends the SQL language combined with many features
+        that safely store and scale the most complicated data workloads.
+        We use Patroni as the high-availability solution, PGBouncer as the pooling solution, and WAL-G as the backup solution.
+
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/postgres/postgres
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/patroni-registry
+        developer_guide:
+        service:
+          - https://www.postgresql.org/docs/9.6/index.html
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+        - service: consul
+      components:
+        - patroni
+      configurations:
+        - config_name: postgresql.conf
+          location: /var/opt/gitlab/postgresql/postgresql.conf
+        - config_name: pg_ident.conf
+          location: /var/opt/gitlab/postgresql/pg_ident.conf
+        - config_name: pg_hba.conf
+          location: /var/opt/gitlab/postgresql/pg_hba.conf
+        - config_name: postgresql.auto.conf
+          location: /var/opt/gitlab/postgresql/postgresql.auto.conf
+        - config_name: patroni.yml
+          location: /var/opt/gitlab/patroni/patroni.yml
+      chef_roles:
+        - gstg-base-db-patroni-registry
+        - gprd-base-db-patroni-registry
+      scalability:
+        bound: cpu, memory, disk
+        scalable: horizontal or vertical. We can horizontally scale by adding more
+          read only replicas to serve read oprations. However, for serving read/write
+          operations we may need to scale vertically.
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Postgres
+          permalink: https://log.gprd.gitlab.net/goto/d0f8993486c9007a69d85e3a08f1ea7c  # TODO: Update when provisioned in gprd
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3669d551a595a3a5cf1e9318b74e6c22  # TODO: Update when provisioned in gprd
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgres.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-backups-wale-walg.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/patroni-management.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/pg-ha.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-disk-space.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-rebuild-trigram-indexes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-replica.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/postgresql-switchover.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: RNfEDpLmz  # TODO: Update when provisioned
+        primary_grafana_dashboard: patroni-main/patroni-overview
+
+  - name: patroni-ci
+    tier: db
+    friendly_name: CI Postgres (Patroni)
+    label: Service:Postgres
+    business:
+      requirement: We use Postgres as our backend database.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        PostgreSQL is a powerful, open source object-relational database system
+        that uses and extends the SQL language combined with many features
+        that safely store and scale the most complicated data workloads.
+        We use Patroni as the high-availability solution, PGBouncer as the pooling solution, and WAL-G as the backup solution.
+
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+    technical:
+      project:
+        - https://github.com/postgres/postgres
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/patroni-ci
+        developer_guide:
+        service:
+          - https://www.postgresql.org/docs/9.6/index.html
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+        - service: consul
+      components:
+        - patroni
+      configurations:
+        - config_name: postgresql.conf
+          location: /var/opt/gitlab/postgresql/postgresql.conf
+        - config_name: pg_ident.conf
+          location: /var/opt/gitlab/postgresql/pg_ident.conf
+        - config_name: pg_hba.conf
+          location: /var/opt/gitlab/postgresql/pg_hba.conf
+        - config_name: postgresql.auto.conf
+          location: /var/opt/gitlab/postgresql/postgresql.auto.conf
+        - config_name: patroni.yml
+          location: /var/opt/gitlab/patroni/patroni.yml
+      chef_roles:
+        - gstg-base-db-patroni-ci
+        - gprd-base-db-patroni-ci
+      scalability:
+        bound: cpu, memory, disk
+        scalable: horizontal or vertical. We can horizontally scale by adding more
+          read only replicas to serve read oprations. However, for serving read/write
+          operations we may need to scale vertically.
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Postgres
+          permalink: https://log.gprd.gitlab.net/goto/d0f8993486c9007a69d85e3a08f1ea7c  # TODO: Update when provisioned in gprd
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3669d551a595a3a5cf1e9318b74e6c22  # TODO: Update when provisioned in gprd
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgres.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-backups-wale-walg.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/patroni-management.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/pg-ha.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-disk-space.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-rebuild-trigram-indexes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-replica.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/postgresql-switchover.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: RNfEDpLmz  # TODO: Update when provisioned
+        primary_grafana_dashboard: patroni-ci-main/patroni-ci-overview
+
+  - name: plantuml
+    tier: sv
+    friendly_name: PlantUML
+    label: Service:PlantUML
+    business:
+      requirement: PlantUML is used to render UML diagrams in the GitLab application
+      customers:
+        - GitLab.com customers
+      SLA:
+        availability:   # Availability SLA promised to customers
+        response_time:  # Response time for inquiries or issues relating this service
+      business_value: PlantUML is used to render unified modeling language (UML) diagrams.
+    technical:
+      project:
+        - https://plantuml.com/
+      slx:
+      documents:
+        design:
+        architecture: https://docs.gitlab.com/ee/administration/integration/plantuml.html
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/plantuml/overview.md
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/plantuml
+        developer_guide: https://docs.gitlab.com/ee/administration/integration/plantuml.html#enable-plantuml-integration
+        service:
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+      components:
+      configurations:
+      chef_roles:
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Access Logs
+          permalink: https://console.cloud.google.com/logs/query;query=resource.labels.target_proxy_name%3D%22k8s-tps-plantuml-plantuml--58df01f69d082883%22%0Aresource.type%3D%22http_load_balancer%22;timeRange=PT30M?project=gitlab-production
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks: []
+      playbooks: []
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: plantuml
+        primary_grafana_dashboard: plantuml-main/plantuml-overview
+
+  - name: postgres-archive
+    tier: db
+    friendly_name: Postgres DR Archive
+    label: Service:PostgresArchive
+    business:
+      requirement: |
+        It is required to continuously recover from the WAL archive
+        and hence test the WAL archive. This is necessary because PITR
+        relies on a continuous sequence of WAL that can be applied to a
+        snapshot of the database (basebackup). If that sequence is broken
+        for whatever reason, PITR can only recover until this point and no
+        further. We monitor the replication lag of the archive replica.
+        If it falls back too far, there's likely a problem with the WAL archive.
+      customers:
+        - Internally used by DBREs
+      business_value: |
+        Having multiple ways to recover a database is necessary in case one way
+        failed for any reason. WAL archiving is one of the ways we can restore
+        a database, in addition to disk snapshots and, in the near future, ZFS
+        snapshots.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/postgres/postgres
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/postgres-archive
+        developer_guide:
+        service:
+          - https://www.postgresql.org/docs/9.6/index.html
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+      configurations:
+        - config_name: postgresql.conf
+          location: /var/opt/gitlab/postgresql/postgresql.conf
+        - config_name: pg_ident.conf
+          location: /var/opt/gitlab/postgresql/pg_ident.conf
+        - config_name: pg_hba.conf
+          location: /var/opt/gitlab/postgresql/pg_hba.conf
+        - config_name: postgresql.auto.conf
+          location: /var/opt/gitlab/postgresql/postgresql.auto.conf
+      chef_roles:
+        - gstg-base-db-postgres-archive
+        - gprd-base-db-postgres-archive
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: postgres
+          permalink: https://log.gprd.gitlab.net/goto/0b7a4ff726bfd3e4eb4b51da82979efc
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/4a5ab78f128dcf1b40ad16b75e521609
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgres.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-backups-wale-walg.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/patroni-management.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/pg-ha.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-disk-space.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-rebuild-trigram-indexes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-replica.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/postgresql-switchover.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: RNfEDpLmz
+        primary_grafana_dashboard: 000000144/postgresql-overview
+
+  - name: postgres-dr-delayed
+    tier: db
+    friendly_name: Postgres DR Delayed Replica
+    label: Service:PostgresDelayed
+    business:
+      requirement: |
+        It is required to be able to restore DB records that was deleted
+        within the last 8 hours from the production DB. This is done by
+        continuously restoring WAL segments that are only 8 hours old.
+      customers:
+        - Internally used by DBREs
+      business_value: |
+        It is convenient for us and the customers as sometimes people
+        have second thoughts about a project they deleted, so we can
+        restore its relevant DB records from DR Delayed as it hasn't
+        been deleted there yet.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/postgres/postgres
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+        readiness_review:
+        service:
+          - https://www.postgresql.org/docs/9.6/index.html
+        security: https://www.postgresql.org/support/security/
+      dependencies:
+      configurations:
+        - config_name: postgresql.conf
+          location: /var/opt/gitlab/postgresql/postgresql.conf
+        - config_name: pg_ident.conf
+          location: /var/opt/gitlab/postgresql/pg_ident.conf
+        - config_name: pg_hba.conf
+          location: /var/opt/gitlab/postgresql/pg_hba.conf
+        - config_name: postgresql.auto.conf
+          location: /var/opt/gitlab/postgresql/postgresql.auto.conf
+      chef_roles:
+        - gstg-base-db-postgres-delayed
+        - gprd-base-db-postgres-delayed
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3fea946a232d2288e90e575c912fa3e7
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#database-architecture
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgres.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-backups-wale-walg.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/patroni-management.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/pg-ha.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-disk-space.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-rebuild-trigram-indexes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/patroni/postgresql-replica.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/postgresql-switchover.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: RNfEDpLmz
+        primary_grafana_dashboard: 000000144/postgresql-overview
+
+  - name: psql-timings
+    tier: inf
+    friendly_name: PSQL Timings
+    label: Service:PsqlTimings
+    business:
+      requirement: |
+        It is needed to store profiles of GitLab Rails RSpec test suites as executed in our CI pipelines,
+        to identify specs with interesting attributes. It is also needed to
+        store profiling results from https://gitlab.com/gitlab-com/gitlab-profiler.
+      customers:
+        - GitLab.com employees
+      business_value: |
+        Having profiles for RSpec test suites has advantages like finding the slowest specs,
+        or the spec which issues the most queries. Profiling GitLab.com URLs can help identify
+        a bottle-nick or a code that's written poorly.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://gitlab.com/gitlab-org/gitlab-ce/blob/master/config/initializers/rspec_profiling.rb
+          - https://github.com/foraker/rspec_profiling
+          - https://gitlab.com/gitlab-com/gitlab-profiler
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: postgresql.conf
+          location: /etc/postgresql/9.5/main/postgresql.conf
+      chef_roles:
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: PostgreSQL
+          permalink: /var/log/postgresql/postgresql-9.5-main.log
+    infrastructure:
+      provider: do
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard:
+
+  - name: monitoring
+    tier: inf
+    friendly_name: Monitoring
+    label: Service:Prometheus
+    business:
+      requirement: |
+        It is needed to collect, store and view metrics exposed by
+        parts of our infrastructure that are not running application
+        code (e.g. database, redis, ...).
+      customers:
+        - Internally for infrastructure monitoring at dashboards.gitlab.net
+      business_value: |
+        It gives visibility into our non-application infrastructure (see requirement above),
+        it also powers AlertManager.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/tanka-deployments
+      slx:
+      documents:
+        design:
+        architecture: https://github.com/prometheus/prometheus/blob/7632e976c0617f6206565541c6d91c02c6e12ed5/README.md#architecture-overview
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/monitoring
+        developer_guide: https://docs.gitlab.com/ee/development/prometheus_metrics
+        service:
+          - https://github.com/prometheus/prometheus/blob/7632e976c0617f6206565541c6d91c02c6e12ed5/README.md
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: prometheus.yml
+          location: /opt/prometheus/prometheus/prometheus.yml
+        - config_name: Rule definitions
+          location: /opt/prometheus/prometheus/rules/*.yml
+      chef_roles:
+        - gstg-infra-prometheus
+        - gprd-infra-prometheus
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/3a0b51d10d33c9558765e97640acb325
+        - name: monitoring
+          permalink: https://log.gprd.gitlab.net/goto/09f7c84d5f36e3df0d03382dc350cddf
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: tanka
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-checkpointing-slow.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-empty-sd.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-failed-checkpoints.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-failed-compactions.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-failed-wal-truncations.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-failing-rule-evaluations.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-filesd-errors.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-high-memory.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-indexing-backlog.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-invalid-config.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-is-down.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-not-ingesting.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-notifications-backlog.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-out-of-order.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-persist-errors.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-persistence-pressure-high.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-scrape-errors.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-slow-rule-eval.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-slow-scrapes.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/prometheus-slow-series-maintenance.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/prometheus-storage-inconsistent.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/monitoring/upgrades.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: monitoring
+        primary_grafana_dashboard: monitoring-main/monitoring-overview
+
+  - name: redis
+    tier: db
+    friendly_name: Persistent Redis
+    label: Service:Redis
+    business:
+      requirement: |
+        Redis is packaged to provide a place to store session data and temporary cache information
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis brings performance as it is an in-memory data structure store and it provides high availability via Redis Sentinel. Therefore, essentially we have a performant and HA service that couples nicely with SideKiq and lets background jobs to be stored and processed.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-single
+        - gprd-base-db-redis-server-single
+      scalability:
+        bound: memory
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Redis
+          permalink: https://log.gprd.gitlab.net/goto/27a6bf4e347ef9da754f06eb0a54aedc
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/e107ce00a9adede2e130d0c8ec1a2ac7
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1DOIKubC0edztw3_t7ZW-Lqh24heVlrdQ
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/redis-new-cluster-replication.md
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: redis
+        primary_grafana_dashboard: redis-main/redis-overview
+
+  - name: redis-cache
+    tier: db
+    friendly_name: Redis Cache
+    label: Service:RedisCache
+    business:
+      requirement: |
+        Redis-Cache is used to cache things like function calls, return values...etc in our Rails appl for performance and optimization purpose. Instead of using the Rails' built-in caching infrastructure, we use annotation decorations to do caching in Redis-Cache.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis-Cache delivers us performance and optimization in our Rails app.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis-cache
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-cache
+        - gprd-base-db-redis-server-cache
+      scalability:
+        bound: memory
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/1a4342231de57c0ceabc8f5e0e402909
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1H5s5EonMX0Mzz6jahAotMOb349TNO7YK
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-cache-main/redis-cache-overview
+
+  - name: redis-cache-sentinel
+    tier: db
+    friendly_name: Redis Cache Sentinel
+    label: Service:RedisCacheSentinel
+    business:
+      requirement: |
+        Redis Sentinel provides High Availability (HA) to Redis. In addition, Sentinel monitors Redis nodes, initiates automatical failover and service discovery.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis is a critical service for us. Therefore, the business value Sentinel provides is huge in the sense that not only does it ensure we have resilient service but also saves us a lot of work and resources (such as monitoring, automatical failover and discovery).
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://redis.io/topics/sentinel
+          - https://docs.gitlab.com/omnibus/settings/redis.html#redis-sentinel
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: sentinel.conf
+          location: /var/opt/gitlab/sentinel/sentinel.conf
+      chef_roles:
+        - gstg-base-db-redis-sentinel-cache
+        - gprd-base-db-redis-sentinel-cache
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: yellow
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/0b28cb1d20663b4359f8bc05995a22ad
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1xJfH7XhfcRzYhgHIelenAn3AZbco6HN0
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: wccEP9Imk/redis
+
+  - name: redis-ratelimiting
+    tier: db
+    friendly_name: Redis RateLimiting
+    label: Service:Redis
+    business:
+      requirement: |
+        Redis-RateLimiting is used as a fast persistent key-value store for rate-limiting state (RackAttack and Application Rate Limiter)
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis-RateLimiting allows the application to protect itself against excessive (malicious or accidental) short term usage by individual IPs or users, contributing to ensuring uptime/availability for all customers.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis-ratelimiting
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-ratelimiting
+        - gprd-base-db-redis-server-ratelimiting
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: orange
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/b0f9e5bad8ac43431efaf9f350e3a975
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1H5s5EonMX0Mzz6jahAotMOb349TNO7YK
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-ratelimiting-main/redis-ratelimiting-overview
+
+  - name: redis-sessions
+    tier: db
+    friendly_name: Redis Sessions
+    infra_owner: sre_observability
+    label: Service:Redis
+    business:
+      requirement: |
+        Redis-Sessions is used as a fast semi-persistent key-value store for session information.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Session information is critical to the normal operation of the web application in maintaining logged in status within web browsers, and passing transient session-related information around between parts of the application in a user context.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis-sessions
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-sessions
+        - gprd-base-db-redis-server-sessions
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: orange
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/e9073e6e3b9eb444a47e2a396d711c22
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1H5s5EonMX0Mzz6jahAotMOb349TNO7YK
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-sessions-main/redis-sessions-overview
+
+  - name: redis-sidekiq
+    tier: db
+    friendly_name: Redis Sidekiq
+    label: Service:RedisSidekiq
+    business:
+      requirement: |
+        Redis-Sidekiq is used as a fast persistent key-value store for Sidekiq to store job information (queued, scheduled, and results)
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis-Sidekiq allows the sidekiq job processing system to work, a core and critical part of the entire GitLab.com system
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis-sidekiq
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-sidekiq
+        - gprd-base-db-redis-server-sidekiq
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/80a1ff609f91b0fb2b770a3a70784be0
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1H5s5EonMX0Mzz6jahAotMOb349TNO7YK
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-sidekiq-main/redis-sidekiq-overview
+
+  - name: redis-tracechunks
+    tier: db
+    friendly_name: Redis TraceChunks
+    label: Service:Redis
+    business:
+      requirement: |
+        Redis-Tracechunks is used as a fast persistent key-value store for CI build log (trace) chunks on receipt before moving them to object storage
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Redis-TraceChunks allows the CI job system to work, an important part of GitLab.com value
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/redis-tracechunks
+        developer_guide: https://docs.gitlab.com/ee/development/redis.html#redis-guidelines
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: redis.conf
+          location: /var/opt/gitlab/redis/redis.conf
+      chef_roles:
+        - gstg-base-db-redis-server-tracechunks
+        - gprd-base-db-redis-server-tracechunks
+      scalability:
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/a10c2cd2b710f9eb65b13b9a2a328d51
+    infrastructure:
+      provider: gcp
+      architecture: https://drive.google.com/open?id=1H5s5EonMX0Mzz6jahAotMOb349TNO7YK
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-tracechunks-main/redis-tracechunks-overview
+
+  - name: redis-registry-cache
+    tier: db
+    friendly_name: Redis Registry Cache
+    label: Service:Redis
+    business:
+      requirement: |
+        Cache database repository objects in Registry
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Increase performance in our Registry app.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/antirez/redis/
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://redis.io/documentation
+          - https://docs.gitlab.com/omnibus/settings/redis.html
+        security:
+      dependencies:
+        - service:
+      configurations:
+      chef_roles:
+      scalability:
+        bound: memory
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: yellow
+        security_incidents:
+      logging:
+        - name: Redis
+          permalink: https://log.gprd.gitlab.net/goto/04b1f050-44d0-11ed-8d37-e9a2f393ea2a
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: tanka
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/redis/README.md
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: redis-registry-cache-main/redis-registry-cache-overview
+
+  - name: registry
+    tier: sv
+    friendly_name: Container Registry
+    teams:
+      - package
+    label: Service:Registry
+    business:
+      requirement: |
+        It is needed to have a Docker Container Registry integrated into GitLab
+        so every project can have its own space to store its Docker images.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        GitLab is all about having a single, integrated experience and registry is no exception.
+        Customers can easily use their images for GitLab CI, create images specific for tags or branches and much more.
+      SLA:
+        overall_sla_weighting: 1  # If this exists, this service will be included in the overall SLA, using this value as a weighted average
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/docker/distribution
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/registry-gke/overview.md
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/registry
+        developer_guide: https://docs.gitlab.com/ee/development/packages/#package-registry-development
+        service:
+          - https://github.com/docker/distribution/blob/364d2e4a5bed94e9393dd88232ea3be29ca8f27a/README.md
+        security:
+      dependencies:
+        - service: web  # For JWT authentication
+      configurations:
+        - config_name: Registry
+          location: /etc/docker/registry/config.yml
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Registry
+          permalink: https://log.gprd.gitlab.net/goto/9ec8a738ca23a17a9d7b61b4c3a9c96e
+        - name: haproxy
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production&interval=PT1H&resource=gce_instance&customFacets=labels.%22compute.googleapis.com%2Fresource_name%22&advancedFilter=labels.tag%3D%22haproxy%22%0Alabels.%22compute.googleapis.com%2Fresource_name%22%3A%22fe-registry-%22
+        - name: Kubernetes
+          permalink: https://log.gprd.gitlab.net/goto/d614a5576099ff797be559c89fe88baa
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/registry/gitlab-registry.md
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: Ymoh2MEmk
+        primary_grafana_dashboard: registry-main/registry-overview
+
+  - name: nat
+    tier: inf
+    friendly_name: NAT
+    label: Service:NAT
+    business:
+      requirement: |
+        Provides NAT translation for GitLab's service fleet
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Provides NAT translation for GitLab's service fleet.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design: https://cloud.google.com/nat/docs/overview
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/nat
+        developer_guide:
+        service:
+        security:
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: dropped packet logs
+          permalink: https://cloudlogging.app.goo.gl/XvxRJx3ECzThD87x7
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/nat/cloud-nat.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard: nat-main/nat-overview
+
+  - name: sentry
+    tier: inf
+    friendly_name: Monitoring
+    label: Service:Sentry
+    business:
+      requirement: |
+        It is needed to collect, prioritize, and view error events
+        in several applications.
+      customers:
+        - Internally for viewing errors
+      business_value: |
+        It gives visibility into errors we might see in different applications we manage.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/getsentry/sentry
+      slx:
+      documents:
+        design:
+        architecture: A single VM node running the services needed for Sentry, mainly PostgreSQL, Redis Server, and Prometheus for monitoring.
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/sentry
+        developer_guide: https://docs.gitlab.com/ee/operations/error_tracking.html
+        service:
+        security:
+      dependencies:
+        - service:
+      configurations:
+        - config_name: sentry/config.yml
+          location: /etc/sentry
+      chef_roles:
+        - ops-infra-sentry
+      scalability:
+        bound: disk
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/b4618f79f80f44cb21a32623a275a0e6
+
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/monitoring/sentry-is-down.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: sentry
+        primary_grafana_dashboard: sentry-main/sentry-overview
+
+  - name: sidekiq
+    tier: sv
+    friendly_name: Sidekiq Background Jobs
+    teams:
+      - create
+      - distribution_deploy
+      - geo
+      - gitaly
+      - manage
+      - plan
+    label: Service:Sidekiq
+    business:
+      requirement: |
+        It is required as some actions takes considerable amount of time
+        and it can't be done as part of a synchronous HTTP request, so it has to be done
+        in the background.
+      customers:
+        - GitLab.com customers
+        - Internally for long-running data migrations
+      business_value: |
+        It sends emails, processes git push requests, import repositories, and many more.
+        # For a list of available background workers, see https://gitlab.com/gitlab-org/gitlab-ee/tree/master/app/workers
+        # and https://gitlab.com/gitlab-org/gitlab-ee/tree/master/ee/app/workers
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-ce
+        - https://gitlab.com/gitlab-org/gitlab-ee
+      slx:
+      documents:
+        design:
+        architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production-architecture/#service-architecture
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/blob/master/sidekiq/index.md
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/sidekiq
+        developer_guide: https://docs.gitlab.com/ee/development/sidekiq/#sidekiq-guides
+        service:
+          - https://github.com/mperham/sidekiq/blob/master/README.md
+        security:
+      dependencies:
+        - service: postgres
+        - service: gitaly
+        - service: redis
+      configurations:
+        - config_name: gitlab.rb
+          location: /etc/gitlab/gitlab.rb
+      chef_roles:
+        - gstg-base-be-sidekiq
+        - gprd-base-be-sidekiq
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Sidekiq
+          permalink: https://log.gprd.gitlab.net/goto/d7e4791e63d2a2b192514ac821c9f14f
+        - name: Rails
+          permalink: https://log.gprd.gitlab.net/goto/86fbcd537588abef69339a352ef81d72
+        - name: Puma
+          permalink: https://log.gprd.gitlab.net/goto/a2601cff0b6f000339e05cdb9deab58b
+        - name: Unstructured
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-production&interval=PT1H&resource=gce_instance&advancedFilter=jsonPayload.hostname%3A%22sidekiq%22%0Alabels.tag%3D%22unstructured.production%22&customFacets=labels.%22compute.googleapis.com%2Fresource_name%22
+        - name: system
+          permalink: https://log.gprd.gitlab.net/goto/72d0f3fdfd8db18db9800cc04d8b6f55
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/troubleshooting/sidekiq_exception_count.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/sidekiq/sidekiq_stats_no_longer_showing.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/sidekiq/large-sidekiq-queue.md
+      playbooks:
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: c7nMugpmz
+        primary_grafana_dashboard: sidekiq-main/sidekiq-overview
+        sentry_slug: gitlab/gitlabcom/?query=program%3A%22sidekiq%22
+
+  - name: version
+    tier: sv
+    friendly_name: version.gitlab.com
+    label: Service:Version
+    business:
+      requirement: |
+        We want to communicate to our users whether they are running a secure version or a vulnerable version. The original announcement link https://about.gitlab.com/2015/05/07/version-check/ talks about how this exactly works.
+      customers:
+        - GitLab Employees
+      business_value: |
+        Running a vulnerable version opens our customers to security vulnerabilities. Getting insights into version check in time prompts our customers to consider upgrading their software to a secure version. Therefore, the business value the version check brings is tremendous.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/version-gitlab-com
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+          - https://gitlab.com/gitlab-com/version-gitlab-com/blob/master/README.md
+        security:
+      dependencies:
+      configurations:
+        - config_name: database
+          location: /home/gitlab-version/version-gitlab-com/config/database.yml
+        - config_name: nginx
+          location: /etc/nginx/nginx.conf
+        - config_name: redis
+          location: /etc/redis/redis.conf
+        - config_name: sidekiq
+          location: /etc/supervisor/conf.d/version-sidekiq.conf
+      chef_roles:
+        - version-gitlab-com
+        - version-gitlab-walg
+      scalability:
+        note: Per unit work is CPU bound. Therefore, scaling the service horizontally
+          would be the right thing to do. However, Version is a self-contained app
+          and its DB runs locally on the same host. Therefore, horizontal scaling
+          wouldn't work. Our option for now is to scale up the service vertically.
+        bound: cpu
+        scalable: vertical
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: production.log
+          permalink: /var/log/version/
+    infrastructure:
+      provider: aws
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance: https://gitlab.com/gitlab-com/version-gitlab-com/blob/master/README.md
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder:
+        primary_grafana_dashboard:
+        sentry_slug:
+
+  - name: pubsub
+    tier: inf
+    friendly_name: Pubsub for Logging
+    label: Service:PubSub
+    business:
+      requirement: |
+        Deliver logs from multiple sources (including Stackdriver) to ELK.
+      customers:
+        - ELK cluster (logging infrastructure)
+      business_value: |
+        Google's Pub/Sub is very reliable without the burden of maintenance. Integrations with Pub/Sub are available.
+      SLA:
+        availability:
+        response_time: 4 hours (critical), 1 day (L2), 2 days (L3)
+    technical:
+      project:
+        - https://cloud.google.com/pubsub/docs/overview
+        - https://ops.gitlab.net/gitlab-com/gl-infra/terraform-modules/google/pubsubbeat
+        - https://gitlab.com/gitlab-cookbooks/gitlab-elk
+        - https://gitlab.com/gitlab-com/runbooks/tree/master/rules/pubsub.yml
+        - https://gitlab.com/gitlab-com/runbooks/tree/master/rules/gitaly.yml
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+      slx:
+      documents:
+        design: |
+          Services publish their logs to corresponding PubSub topics using fluentd. There is a separate VM for each topic in each environment. Each VM runs a Pubsubbeat process which is subscribed to a topic and uploads messages it receives to ELK.
+        architecture: |
+          Pub/Sub is a messaging service available on GCP which is similar to RabbitMQ or Kafka. It can be used for many things such as event-driven programming or managing distributed systems. We use it for forwarding logs to ELK. Different components and systems publish their logs to a Pub/Sub topic using fluentd. Pubsubbeat (Elastic Beat capable of subscribing to Pub/Sub topics) forwards them to ELK. For more information about how Pub/Sub is used for collecting logs see: https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+        readiness_review:
+        service:
+        security:
+      dependencies:
+        - service:
+          type:
+      configurations:
+        - config_name: pubsubbeat config file
+          location: /opt/pubsubbeat/pubsubbeat.yml
+        - config_name: Prometheus alert rule - logging visibility diminishing
+          location: /opt/prometheus/prometheus/rules/pubsub.yml
+        - config_name: Prometheus alert rule - gitaly pubsub log send rate is low
+          location: /opt/prometheus/prometheus/rules/gitaly.yml
+      chef_roles:
+        - dr-infra-pubsub
+        - gprd-infra-pubsub
+        - gstg-infra-pubsub
+        - ops-infra-pubsub
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: stackdriver
+          permalink: https://console.cloud.google.com/logs
+        - name: multiple indexes in Kibana
+          permalink: https://log.gprd.gitlab.net/goto/2fc394521558a0bfed59f791295ffe51
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+      servers:
+        - server_name:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/pubsub/pubsub-queing.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/gitaly/gitaly-pubsub.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/troubleshooting/elk_mapper_parsing_exception.md
+      playbooks:
+      issues:
+      error_budget:
+      engagement:
+        team:
+    observability:
+      monitors:
+        primary_grafana_dashboard: USVj3qHmk/logging
+        sentry_slug:
+      alerts:
+        - alert_link:
+
+  - name: ci-runners
+    tier: sv
+    friendly_name: CI Runners
+    label: Service:CI Runner
+    business:
+      requirement: |
+        Runners to service CI jobs for any project on GitLab.com.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        CI runners are used by customers to run CI jobs. We offer every
+        account up to 2000 minutes, but more can be purchased by upgrading
+        to a higher plan.
+      SLA:
+        overall_sla_weighting: 0  # Treated as a primary service, but with a zero weight for now
+        availability:
+        response_time: p95 of 60 second job pick up latency
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab-runner
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/ci-runners
+        developer_guide: https://docs.gitlab.com/runner/development/#contribute-to-gitlab-runner-development
+        service:
+          - https://gitlab.com/gitlab-org/gitlab-runner/blob/master/README.md
+        security: https://gitlab.com/gitlab-org/gitlab-runner/blob/master/docs/security/index.md
+      dependencies:
+      configurations:
+        - config_name: Runner
+          location: /etc/gitlab-runner/config.toml
+      chef_roles:
+        - gitlab-runner-base
+        - gitlab-runner-gsrm
+        - gitlab-runner-prm
+        - gitlab-runner-srm
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: shared runners
+          permalink: https://log.gprd.gitlab.net/goto/b9aed2474a7ffe194a10d4445a02893a
+    infrastructure:
+      provider: gcp
+      architecture: https://about.gitlab.com/handbook/engineering/infrastructure/production/architecture/ci-architecture.html
+      provisioning: manual
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/ci-runners/runners_manager_is_down.md
+        - https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/ci-runners/cicd/ci_runner_manager_errors.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_graphs.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_too_many_connections_on_runners_cache_server.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_constantnumberoflongrunningrepeatedjobs.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_pending_builds.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_too_many_archiving_trace_failures.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/cicd/ci_workhorse-queuing.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/README.md
+        - https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/ci-runners/providers/gcp/quotas.md
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/create-runners-manager-node.md
+        - https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/ci-runners/linux/docker-machine/deploy.md
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/ci-runners/fleet-configuration-management/README.md
+      error_budget: https://docs.google.com/spreadsheets/d/1wkK2n5EAvoVXwQZrVoCDsvkYTb1BftL56EzsFW_IA-w/edit
+    observability:
+      monitors:
+        grafana_folder: bpcbFeIiz
+        primary_grafana_dashboard: ci-runners-main/ci-runners-overview
+      alerts:
+        - alert_link: https://alerts.gitlab.net/#/alerts?silenced=false&inhibited=false&filter=%7Bchannel%3D%22ci-cd%22%7D
+
+  - name: stackdriver
+    tier: inf
+    friendly_name: Stackdriver Metrics
+    label: Service:Stackdriver
+    business:
+      requirement: |
+        Stackdriver is the sink for all of our logs across all environments, it's capabale
+        of handling high amount of log entries (e.g. HAProxy logs) that would normally be difficult
+        to be handled in Elasticsearch.
+      customers:
+        - Used internally by GitLab teams
+      business_value: |
+        Allows visibility into the infrastructure, aides in debugging issues and
+        incidents handling.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        service:
+        security:
+      dependencies:
+      configurations:
+        - config_name: Log exclustion
+          location: https://gitlab.com/gitlab-com/gl-infra/terraform-modules/google/stackdriver
+      chef_roles:
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name:
+          permalink:
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/howto%2Flogging.md#stackdriver
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: USVj3qHmk/logging
+        sentry_slug:
+
+  - name: waf
+    tier: lb
+    friendly_name: Cloudflare Web Application Firewall
+    label: Service:WAF
+    business:
+      requirement: |
+        Provide a Web-Application Firewall for the protection of GitLab.com
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Protect GitLab.com from malicious requests
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/tree/master/cloudflare
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/waf
+        developer_guide:
+        service:
+        security:
+      dependencies:
+      configurations:
+      chef_roles:
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name:
+          permalink:
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning:
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/waf/cloudflare.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: waf-main
+        sentry_slug:
+
+  - name: vault
+    tier: inf
+    friendly_name: Hashicorp Vault for Infrastructure
+    label: Service:Vault
+    business:
+      requirement: |
+        Provide a centralised storage of secrets for Gitlab.com infrastructure
+      customers:
+        - Gitlab Infrastructure and Development Teams
+      business_value: |
+        Allow the Gitlab Infrastructure and Development teams to have a central
+        system to be the authoriative source of secrets for use within Gitlab.com
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design:
+        architecture:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/vault
+        developer_guide:
+        service:
+        security:
+      dependencies:
+      configurations:
+      chef_roles:
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Vault
+          permalink: https://nonprod-log.gitlab.net/goto/331c9c10-21df-11ed-af31-918941b0065a
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/vault/README.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: vault-main/vault-overview
+
+  - name: jaeger
+    tier: inf
+    friendly_name: Jaeger
+    label: Service:Jaeger
+    business:
+      requirement: |
+        Jaeger is a distributed tracing system that allows us to understand interactions between components and diagnose performance issues.
+      customers:
+        - Engineering dept
+      business_value: |
+        In order to meet our SLOs, we need the ability to understand system behaviour and sources of latency.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://www.jaegertracing.io/
+        - https://github.com/jaegertracing/jaeger
+        - https://github.com/jaegertracing/jaeger-operator
+        - https://docs.gitlab.com/ee/development/distributed_tracing.html
+      slx:
+      documents:
+        design:
+        architecture: https://www.jaegertracing.io/docs/latest/architecture/
+        readiness_review: TBD
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/jaeger
+        developer_guide: https://docs.gitlab.com/ee/development/distributed_tracing.html
+        service:
+          - https://www.jaegertracing.io/docs/latest/
+        security: https://www.jaegertracing.io/docs/latest/security/
+      dependencies:
+        - service: elasticsearch
+      configurations:
+        - config_name: Tanka deployment
+          location: https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/tanka-deployments/-/tree/master/environments/jaeger
+      chef_roles:
+        - gitlab-jaeger::agent
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Jaeger
+          permalink: TBD
+    infrastructure:
+      provider: gcp
+      architecture: https://www.jaegertracing.io/docs/latest/architecture/
+      provisioning: tanka
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: jaeger-main/jaeger-overview
+
+  - name: woodhouse
+    tier: sv
+    friendly_name: Woodhouse
+    label: Service:Woodhouse
+    business:
+      requirement: |
+        Woodhouse is a monorepo for SRE and incident tooling.
+      customers:
+        - Infrastructure dept
+      business_value: |
+        Woodhouse is a monorepo for SRE and incident tooling.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-com/gl-infra/woodhouse
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/woodhouse
+        developer_guide: https://gitlab.com/gitlab-com/gl-infra/woodhouse/-/blob/master/README.md
+        service:
+        security:
+      dependencies:
+      configurations:
+        - config_name: Tanka deployment
+          location: https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/tanka-deployments/-/tree/master/environments/woodhouse
+      chef_roles: []
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Woodhouse
+          permalink: https://console.cloud.google.com/logs/viewer?project=gitlab-ops&minLogLevel=0&expandAll=false
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: tanka
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: woodhouse/woodhouse-overview
+
+  - name: kas
+    tier: sv
+    friendly_name: Kubernetes Agent
+    label: Service:kas
+    business:
+      requirement: |
+        KAS is the Gitlab.com server side component responsible for
+        handling incoming connections from agentk running in client
+        Kubernetes infrastructure.
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Kas enables the Gitlab.com Kubernetes integration functionality
+        in environments where client Kubernetes clusters are not exposed
+        to the internet.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent
+      slx:
+      documents:
+        design:
+        architecture: https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/blob/master/doc/architecture.md#high-level-architecture
+        readiness_review: https://gitlab.com/gitlab-com/gl-infra/readiness/-/tree/master/kubernetes-agent
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/kas
+        developer_guide: https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/blob/master/doc/developing.md
+        service:
+          - https://docs.gitlab.com/ee/user/clusters/agent/
+        security:
+      dependencies:
+        - service: api
+        - service: gitaly
+        - service: redis
+      configurations:
+        - config_name: config.yaml
+          location: https://gitlab.com/gitlab-org/charts/gitlab/-/blob/master/charts/gitlab/charts/kas/templates/configmap.yaml
+        - config_name: helm
+          location: https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com
+      chef_roles: []
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: kas
+          permalink: https://log.gprd.gitlab.net/goto/b8204a41999cc1a136fa12c885ce8d22
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: helm
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/kas/README.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: kas/kas
+
+  - name: websockets
+    tier: sv
+    friendly_name: Websockets
+    label: Service:Websockets
+    business:
+      requirement: |
+        TBD
+      customers:
+        - GitLab.com customers
+      business_value: |
+        Websockets enables realtime updates for the interactive terminal
+        and ActionCable feature.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://gitlab.com/gitlab-org/gitlab
+        - https://gitlab.com/gitlab-org/gitlab-workhorse
+      slx:
+      documents:
+        design:
+        architecture: TBD
+        readiness_review: TBD
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/websockets
+        developer_guide: https://docs.gitlab.com/ee/development/workhorse/channel.html#introduction-to-websockets
+        service:
+          - TBD
+        security:
+      dependencies:
+      configurations:
+        - config_name: Webosckets
+          location: https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-com
+      chef_roles: []
+      scalability:
+        bound: cpu
+        scalable: horizontal
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: websockets
+          permalink: TBD
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: helm
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+        - TBD
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: websockets/websockets
+
+  - name: cloud-sql
+    tier: inf
+    friendly_name: Google Cloud SQL
+    label: Service:CloudSQL
+    business:
+      requirement: |
+        Provides fully managed PostgreSQL for GitLab's service fleet.
+      customers:
+        - GitLab.com customers
+        - GitLab Employees
+      business_value: |
+        Provides fully managed PostgreSQL for GitLab's service fleet.
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+      slx:
+      documents:
+        design: https://cloud.google.com/sql/docs/features#postgres
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/cloud-sql
+        developer_guide:
+        service:
+        security:
+      security:
+        security_reviewed:
+        data_classification: red
+        security_incidents:
+      logging:
+        - name: Cloud SQL logs
+          permalink: https://cloudlogging.app.goo.gl/uJN6NWcjtK8mwaN89
+    infrastructure:
+      provider: gcp
+      architecture:
+      provisioning: terraform
+    operations:
+      maintenance:
+      runbooks:
+        - https://gitlab.com/gitlab-com/runbooks/blob/master/docs/cloud-sql/cloud-sql.md
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        grafana_folder: cloud-sql
+        primary_grafana_dashboard: cloud-sql-main/cloud-sql-overview
+
+  - name: external-dns
+    tier: sv
+    friendly_name: ExternalDNS
+    label: Service:ExternalDNS
+    business:
+      requirement: Control DNS records dynamically via Kubernetes resources
+      customers:
+        - Infrastructure dept
+      business_value: |
+        Provide hostnames to services running in Kubernetes for service
+        discovery, inter-, and intra-service operability
+      SLA:
+        availability:
+        response_time:
+    technical:
+      project:
+        - https://github.com/kubernetes-sigs/external-dns
+        - https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/gitlab-helmfiles/-/tree/master/releases/external-dns
+      slx:
+      documents:
+        design:
+        architecture:
+        readiness_review:
+        sre_guide: https://gitlab.com/gitlab-com/runbooks/-/tree/master/docs/external-dns
+        developer_guide:
+        service:
+        security:
+      dependencies:
+      configurations:
+      chef_roles:
+      scalability:
+        bound:
+        scalable:
+      security:
+        security_reviewed:
+        data_classification:
+        security_incidents:
+      logging:
+        - name: Stackdriver logs
+          permalink: https://cloudlogging.app.goo.gl/UY7qbsc5KoZZALtT7
+    infrastructure:
+      provider: gcp
+      architecture: gke
+      provisioning: kubernetes
+      accesses:
+        - account_name:
+          access_type:
+          reviewed:
+    operations:
+      maintenance:
+      runbooks:
+      playbooks:
+      error_budget:
+    observability:
+      monitors:
+        primary_grafana_dashboard: external-dns-main/external-dns-overview

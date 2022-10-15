@@ -1,0 +1,22 @@
+groups:
+- name: GitLab Apdex SLO observance status
+  partial_response_strategy: "warn"
+  interval: 1m
+  rules:
+  # TODO: in future, calculate this over multiple burn-rates
+  # See https://gitlab.com/gitlab-com/gl-infra/scalability/-/issues/310 for details
+  - record: 'slo_observation_status'
+    labels:
+      slo: 'apdex_ratio'
+    expr: >
+      gitlab_service_apdex:ratio_5m{monitor="global"}
+      >= bool on(tier, type) group_left
+      slo:min:gitlab_service_apdex:ratio{monitor="global"}
+
+  - record: 'slo_observation_status'
+    labels:
+      slo: 'error_ratio'
+    expr: >
+      gitlab_service_errors:ratio_5m{monitor="global"}
+      <= bool on(tier, type) group_left
+      slo:max:gitlab_service_errors:ratio{monitor="global"}

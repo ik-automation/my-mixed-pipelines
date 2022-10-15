@@ -8,6 +8,8 @@
 - [Grafana: jsonnet libs](https://github.com/grafana/jsonnet-libs/)
 - [Jsonnet: unit](https://github.com/yugui/jsonnetunit)
 - [Jsonnet: databrics style guide](https://github.com/databricks/jsonnet-style-guide)
+- [Gitlab: libsonnet](https://ops.gitlab.net/gitlab-com/runbooks/-/tree/master/libsonnet)
+- [Gitlab: runbooks in jsonnet](https://ops.gitlab.net/gitlab-com/runbooks)
 
 ## Blogs
 
