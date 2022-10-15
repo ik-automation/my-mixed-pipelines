@@ -1,3 +1,4 @@
+// https://github.com/StackVista/helm-charts/blob/master/.gitlab-ci.jsonnet
 // Imports
 local variables = import '.jsonnet-libs/extras/helm_chart_repo/variables.libsonnet';
 
