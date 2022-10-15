@@ -7,6 +7,7 @@
 - [Grafana: tanka](https://tanka.dev/tutorial/jsonnet)
 - [Grafana: jsonnet libs](https://github.com/grafana/jsonnet-libs/)
 - [Jsonnet: unit](https://github.com/yugui/jsonnetunit)
+- [Jsonnet: databrics style guide](https://github.com/databricks/jsonnet-style-guide)
 
 ## Installation
 

@@ -1,5 +1,5 @@
 // https://github.com/yugui/jsonnetunit
-local test = import "test.libsonnet";
+local test = import "lib/test.libsonnet";
 
 test.suite({
     testIdentity: {actual: 1, expect: 1},
