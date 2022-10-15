@@ -9,6 +9,10 @@
 - [Jsonnet: unit](https://github.com/yugui/jsonnetunit)
 - [Jsonnet: databrics style guide](https://github.com/databricks/jsonnet-style-guide)
 
+## Blogs
+
+- [How to test jsonnet](https://dev.to/cuotos/unit-testing-complex-jsonnet-objects-and-arrays-kpe)
+
 ## Installation
 
 ```yml

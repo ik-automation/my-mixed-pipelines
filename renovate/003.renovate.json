@@ -1,0 +1,60 @@
+// https://gitlab.com/gitlab-com/gl-infra/k8s-workloads/tanka-deployments/-/blob/master/renovate.json
+{
+  "extends": [
+    "config:base",
+    ":disableDependencyDashboard",
+    ":disableRateLimiting"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "assigneesFromCodeOwners": true,
+  "regexManagers": [
+    {
+      "fileMatch": ["^chartfile\.yaml$"
+      ],
+      "matchStrings": [
+        "renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( depType=(?<depType>.*?))?\\s*(version|tag):\\s*(?<currentValue>.*)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    },
+    {
+      "fileMatch": [
+        "\\.(j|lib)sonnet$"
+      ],
+      "matchStrings": [
+        "renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( registryUrl=(?<registryUrl>.*?))?( versioning=(?<versioning>.*?))?( depType=(?<depType>.*?))?\\s*(version|tag):\\s*'(?<currentValue>[^']*)',"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    },
+    {
+      "fileMatch": ["^\.tool-versions$"
+      ],
+      "matchStrings": [
+        "^# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?( depType=(?<depType>.*?))?\\n[^\\s]+\\s+(?<currentValue>.*)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchFiles": [
+        "chartfile.yaml"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "curl -sL -o- https://get.helm.sh/helm-v$(awk '/^helm / { print $2 }' .tool-versions)-linux-amd64.tar.gz | tar xz --strip-components=1 -C /usr/local/bin/ linux-amd64/helm && chmod +x /usr/local/bin/helm",
+          "curl -sL -o /usr/local/bin/tk https://github.com/grafana/tanka/releases/download/v$(awk '/^tanka / { print $2 }' .tool-versions)/tk-linux-amd64 && chmod +x /usr/local/bin/tk",
+          "tk tool charts vendor"
+        ],
+        "fileFilters": [
+          "chartfile.yaml",
+          "charts/**"
+        ]
+      }
+    }
+  ],
+  "ignorePaths": [
+    "charts/**"
+  ]
+}
