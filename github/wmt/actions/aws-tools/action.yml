@@ -1,0 +1,18 @@
+name: 'aws-tools'
+description: 'Greet someone and record the time'
+inputs:
+  command:  # id of input
+    description: 'Command to run.'
+    required: true
+    default: 'pwd && ls -la'
+outputs:
+  time: # id of output
+    description: 'The time we greeted you'
+branding:
+  icon: 'award'
+  color: 'green'
+runs:
+  using: 'docker'
+  image: 'docker://debian:stretch-slim'
+  args:
+    - ${{ inputs.command }}

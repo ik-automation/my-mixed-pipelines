@@ -1,0 +1,82 @@
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+# https://github.com/foo-software/lighthouse-check-action
+# https://github.com/marketplace/actions/lighthouse-ci-action
+name: 'lighthouse'
+description: 'This action integrates Lighthouse CI with Github Actions environment.'
+
+inputs:
+  urls:
+    description: 'A comma-separated list of URLs (or page API tokens if running remotely).'
+    required: true
+  env:
+    description: 'Current Environment.'
+    required: true
+  github-token:
+    description: "Github access token. Required to make a Jira Issue"
+    required: true
+  template:
+    description: "The name of the file to use as the issue template."
+    required: false
+    default: .github/templates/lighthouse.md
+
+outputs:
+  issue-number:
+    description: " Number of the issue that was created"
+    value: ${{ steps.params.outputs.issue_number }}
+  issue-url:
+    description: "URL of the issue that was created"
+    value: ${{ steps.params.outputs.issue_url }}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: echo "Executing '${{ github.action }}' action..."
+
+    - shell: bash
+      run: mkdir ${{ github.workspace }}/tmp
+
+    - name: run lighthouse
+      uses: foo-software/lighthouse-check-action@master
+      id: test
+      with:
+        urls: ${{ inputs.urls  }}
+        outputDirectory: "${{ github.workspace }}/tmp"
+
+    - name: results
+      id: results
+      if: ${{ success() }}
+      shell: bash
+      run: |
+        echo "::set-output name=accessibility::$(cat ${{ github.workspace }}/tmp/results.json | jq '.[] | .scores.accessibility')"
+        echo "::set-output name=bestPractices::$(cat ${{ github.workspace }}/tmp/results.json | jq '.[] | .scores.bestPractices')"
+        echo "::set-output name=performance::$(cat ${{ github.workspace }}/tmp/results.json | jq '.[] | .scores.performance')"
+        echo "::set-output name=progressiveWebApp::$(cat ${{ github.workspace }}/tmp/results.json | jq '.[] | .scores.progressiveWebApp')"
+        echo "::set-output name=seo::$(cat ${{ github.workspace }}/tmp/results.json | jq '.[] | .scores.seo')"
+        echo ${{ toJson(steps.status.outputs)}}
+
+    - name: create-issue-from-template-with-values
+      uses: JasonEtco/create-an-issue@v2.6.0
+      if: success()
+      id: create-issue
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token  }}
+        ACCESSIBILITY: ${{ steps.results.outputs.accessibility }}
+        BEST_PRACTICES: ${{ steps.results.outputs.bestPractices }}
+        PERFORMANCE: ${{ steps.results.outputs.performance }}
+        PROGRESSIVE_WEBAPP: ${{ steps.results.outputs.progressiveWebApp }}
+        SEO: ${{ steps.results.outputs.seo }}
+        TITLE: "Lightouse weekly report(${{ inputs.env }})"
+        ASIGNEES: ${{ github.repository_owner }}
+      with:
+        filename: ${{ inputs.template  }}
+        assignees: ${{ github.repository_owner }}
+        update_existing: true
+
+    - shell: bash
+      id: params
+      run: |
+        echo Created issue number ${{ steps.create-issue.outputs.number }}
+        echo Created ${{ steps.create-issue.outputs.url }}
+        echo "::set-output name=ISSUE_NUMBER::${{ steps.create-issue.outputs.number }}"
+        echo "::set-output name=ISSUE_URL::${{ steps.create-issue.outputs.url }}"

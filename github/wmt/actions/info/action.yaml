@@ -1,0 +1,108 @@
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+name: 'info'
+description: 'provide workflow information'
+
+inputs:
+  source_branch:
+    description: 'Repository name with owner. For example, actions/checkout'
+    required: true
+  source_path:
+    description: 'Relative path under "source_branch" to place the repository'
+    required: false
+    default: source
+  this_repository:
+    description: 'This (current) repository.'
+    required: false
+    default: ${{ github.repository }}
+  run_id:
+    description: 'A specific workflow run id.'
+    required: false
+    default: ${{ github.run_id }}
+  gh_action:
+    description: 'Github workflow Action from which current action is executed.'
+    required: false
+    default: ${{ github.workflow }}
+  env:
+    description: 'Current Environment.'
+    required: true
+  service_name:
+    description: 'Service name under development.'
+    required: false
+    default: ${SERVICE_NAME}
+  region:
+    description: 'AWS region'
+    required: false
+    default: ${AWS_DEFAULT_REGION}
+  build-image:
+    description: "To build docker image or not"
+    required: true
+    default: 'true'
+  debug:
+    description: "Enable or Disable debug"
+    required: false
+    default: 'false'
+
+outputs:
+  env:
+    description: "Current Environment"
+    value: ${{ steps.build_params.outputs.current_env }}
+  workspace_branch:
+    description: "Workspace branch"
+    value: ${{ steps.build_params.outputs.source_branch }}
+  service_version: # should use dash
+    description: "Service Version"
+    value: ${{ steps.build_params.outputs.service_version }}
+  service_name:
+    description: "Service Name"
+    value: ${{ steps.build_params.outputs.service_name }}
+  timestamp:
+    description: "Time Stamp when job runs"
+    value: ${{ steps.build_params.outputs.timestamp }}
+  build_url:
+    description: "CI system build url"
+    value: ${{ steps.build_params.outputs.action_run_url }}
+  debug:
+    description: "Enable or Disable debug"
+    value: ${{ inputs.debug }}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: echo "Executing '${{ github.action }}' action..."
+
+    - name: build_params
+      id: build_params
+      shell: bash
+      env:
+        BUILD_IMAGE: ${{ inputs.env }}
+      run: |
+        this_sha=$(git rev-parse --short HEAD)
+        sha=${this_sha}
+        [ -d "source" ] && sha=$(git rev-parse --short HEAD)
+        echo "sha: $sha vs $this_sha"
+        time_stamp=$(date -u +'%Y-%m-%dT%H-%M')
+        source_branch=${{ inputs.source_branch  }}
+        echo "::set-output name=sha::${sha}"
+        echo "::set-output name=CURRENT_DATE::${time_stamp}"
+        echo "::set-output name=SOURCE_BRANCH::${source_branch}"
+        echo "::set-output name=ACTION_RUN_URL::https://github.com/${{inputs.this_repository}}/actions/runs/${{inputs.run_id}}"
+        echo "::set-output name=ACTION_WORKFLOW_URL::https://github.com/${{github.this_repository}}/actions/workflows/${{inputs.gh_action}}.yml"
+        echo "::set-output name=CURRENT_ENV::${{ inputs.env }}"
+        echo "::set-output name=SERVICE_NAME::${{ inputs.service_name }}"
+        echo "::set-output name=TIMESTAMP::${time_stamp}"
+
+        if [ "${{ inputs.build-image }}" == "true" ]; then
+          echo "::set-output name=SERVICE_VERSION::${source_branch}-${time_stamp}-${sha}"
+        else
+          echo "::set-output name=SERVICE_VERSION::${source_branch}-latest"
+        fi
+
+
+    - name: information
+      shell: bash
+      run: |
+        echo "ENVIRONMENT: ${{ steps.build_params.outputs.current_env }}"
+        echo "BRANCH: ${{ steps.build_params.outputs.source_branch }}"
+        echo "SERVICE VERSION: ${{ steps.build_params.outputs.service_version }}"
+        echo "SERVICE NAME: ${{ steps.build_params.outputs.service_name }}"

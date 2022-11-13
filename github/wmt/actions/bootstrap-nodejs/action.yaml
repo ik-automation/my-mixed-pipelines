@@ -1,0 +1,48 @@
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+name: 'bootstrap-nodejs'
+description: 'bootstrap-nodejs'
+
+inputs:
+  node-version:
+    description: 'Repository name with owner. For example, actions/checkout'
+    required: true
+  source-directory:
+    description: 'Source directory where node modules could be installed'
+    required: true
+
+outputs:
+  cache_hit:
+    description: "A boolean value to indicate an exact match was found for the primary key"
+    value: ${{ steps.node-cache.outputs.cache-hit }}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: echo "Executing '${{ github.action }}' action..."
+
+    - name: setup-nodejs-${{ inputs.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: get-yarn-cache-directory-path
+      id: yarn-cache-dir-path
+      shell: bash
+      run: |
+        echo "::set-output name=dir::$(yarn cache dir)"
+        echo "::set-output name=dir::$(npm config get cache)"
+
+    - name: cache-node-dependencies
+      uses: actions/cache@v3
+      id: node-cache
+      with:
+        path: |
+          ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          ${{ steps.npm-cache-dir.outputs.dir }}
+          ~/.npm
+          **/node_modules
+          ${{ inputs.source-directory }}/node_modules
+        key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-modules-
