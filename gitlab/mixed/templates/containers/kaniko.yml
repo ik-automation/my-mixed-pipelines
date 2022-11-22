@@ -1,0 +1,95 @@
+.containers.kaniko:
+  resource_group: "$CI_COMMIT_REF_SLUG/$CI_COMMIT_SHA/$CI_JOB_NAME"
+  inherit:
+    default: false
+  artifacts:
+    when: on_success
+    reports:
+      dotenv: kaniko.env
+  image:
+    name: "gcr.io/kaniko-project/executor:v1.3.0-debug"
+    entrypoint: [""]
+  variables:
+    REGISTRY_MIRROR: "registry-cache.shops.com"
+    # --- -- -
+    # ! FOR EXAMPLE ! MUST BE COMMENTED !
+    # BUILD_ARGS: ""
+    # BUILD_CACHE: ""
+    # BUILD_CONTEXT: ""
+    # BUILD_DST: ""
+    # BUILD_EXTRA_FLAGS: ""
+    # DOCKERFILE_PATH: ""
+    # REGISTRY_SUB_PATH: ""
+    # IMAGE_TAG: ""
+    # --- -- -
+  before_script: []
+  after_script: []
+  script:
+    - | # --- -- -
+      # Kaniko config
+      cat << EOF > "$DOCKER_CONFIG/config.json"
+      {
+        "auths": {
+          "https://$CI_REGISTRY/": {
+            "auth": "$( printf $CI_REGISTRY_USER:$CI_REGISTRY_PASSWORD | base64 )"
+          }
+        }
+      }
+      EOF
+
+    - | # --- -- -
+      # Set destination
+      if [ -z "${BUILD_DST:-}" ]; then
+        REGISTRY_SUB_PATH="${REGISTRY_SUB_PATH=$CI_COMMIT_REF_SLUG}"
+        BUILD_DST=$( printf '%s\n' \
+            "${CI_REGISTRY_IMAGE:?}${REGISTRY_SUB_PATH:+/$REGISTRY_SUB_PATH}:${IMAGE_TAG:-$CI_COMMIT_SHORT_SHA}" \
+            "${CI_REGISTRY_IMAGE:?}${REGISTRY_SUB_PATH:+/$REGISTRY_SUB_PATH}:latest" \
+        )
+      fi
+      for i in ${BUILD_DST}; do
+        printf '%s\n' $i
+        BUILD_EXTRA_FLAGS="--destination=${i} ${BUILD_EXTRA_FLAGS:-}"
+      done
+
+    - | # --- -- -
+      # Set build-args
+      if ( printenv BUILD_ARGS | grep -qE -- '^\s*-+[a-z]+' ); then
+        BUILD_EXTRA_FLAGS="${BUILD_ARGS:-} ${BUILD_EXTRA_FLAGS:-}"
+      else
+        for i in ${BUILD_ARGS:-}; do
+          BUILD_EXTRA_FLAGS="--build-arg ${i} ${BUILD_EXTRA_FLAGS:-}"
+        done
+      fi
+
+    - | # --- -- -
+      # Kaniko build
+      /kaniko/executor \
+        ${CI_DEBUG_TRACE:+--verbosity=debug} \
+        \
+        --cache="${BUILD_CACHE:-true}" \
+        --cache-repo="${CI_REGISTRY_IMAGE}/cache" \
+        \
+        --image-name-with-digest-file="digest.txt" \
+        \
+        ${REGISTRY_MIRROR:+--registry-mirror="$REGISTRY_MIRROR"} \
+        \
+        --label branch="${CI_COMMIT_REF_NAME:?}" \
+        --label commit="${CI_COMMIT_SHA:?}" \
+        --label build="${CI_JOB_ID:?}" \
+        --label project="${CI_PROJECT_PATH:?}" \
+        \
+        --build-arg GIT_BRANCH="${CI_COMMIT_REF_NAME:?}" \
+        --build-arg GIT_COMMIT_SHA="${CI_COMMIT_SHA:?}" \
+        --build-arg CI_JOB_TOKEN \
+        --build-arg SERVICE_NAME \
+        --build-arg BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%S%z')" \
+        \
+        ${BUILD_EXTRA_FLAGS:?} \
+        \
+        ${DOCKERFILE_PATH:+--dockerfile="$DOCKERFILE_PATH"} \
+        --context="${BUILD_CONTEXT:-./}"
+
+    - | # --- -- -
+      # Save image name
+      printf "${CI_JOB_NAME//[^0-9A-Za-z]/_}=" | tr [a-z] [A-Z] > kaniko.env
+      head -1 digest.txt >> kaniko.env

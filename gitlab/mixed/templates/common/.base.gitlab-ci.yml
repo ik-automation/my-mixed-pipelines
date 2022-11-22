@@ -1,0 +1,60 @@
+.ci-job:
+  tags: [ci-jobs]
+
+.ci_function:
+  interruptible: false
+  image: $DOCKER_CI_IMAGE
+  dependencies: []
+  before_script:
+    - export PIPE_VERSION="0.0.5"
+    - export CI_VERSION="${CI_VERSION:-1.5.x}"
+    - echo "$CI_VERSION"
+    - eval "$(curl -m 60 -s https://gitlab.shops.com/deploy/ci/-/raw/$CI_VERSION/functions.sh)"
+    - check_dascli_ver
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+.register_service:
+  after_script:
+      - export CI_VERSION="${CI_VERSION:-1.5.x}"
+      - echo "$CI_VERSION"
+      - eval "$(curl -m 60 -s https://gitlab.shops.com/deploy/ci/-/raw/$CI_VERSION/functions.sh)"
+      - register_service
+
+.k8s_deploy:
+  extends:
+    - .ci_function
+    - .register_service
+  stage: deploy
+  allow_failure: false
+  # variables:
+  #   GIT_DEPTH: "0"
+  tags:
+    - staging
+  script:
+    - check_resources
+    - deploy_config
+    - k8s_deploy "${SERVICE_NAME}-${CI_COMMIT_REF_SLUG}"
+    - clean_config
+  when: manual
+
+.clean:
+  extends: .ci_function
+  stage: close
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - helm_delete_branch "${SERVICE_NAME}"
+  when: manual
+
+.keycloak:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: pre-deploy
+  allow_failure: true
+  script:
+    - run_ci

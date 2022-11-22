@@ -1,0 +1,120 @@
+.B/G production:
+  extends:
+    - .k8s_deploy
+    - .register_service
+  variables:
+    IMAGE_RELEASE: "true"
+    SKIP_LATEST_TAGGING: "true"
+    SELECTOR_TAG: "${CI_PIPELINE_IID}"
+  tags:
+    - production
+    - deploy
+  script:
+    - check_resources
+    - deploy_config
+    - k8s_deploy "$SERVICE_NAME"-"$CI_PIPELINE_IID"
+  environment:
+    name: production
+    url: http://$SERVICE_NAME-$CI_PIPELINE_IID.prod.a.o3.ru
+  only:
+    refs:
+      - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  when: manual
+  resource_group: production
+
+.production switch:
+  extends: .switch
+  tags:
+    - production
+    - switch
+  variables:
+    SELECTOR_TAG: "${CI_PIPELINE_IID}"
+    DISABLE_CHECK_DOCKER_IMAGE: "yes"
+  only:
+    refs:
+      - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  environment:
+    name: default-production
+    url: http://$SERVICE_NAME.prod.a.o3.ru
+  when: manual
+  allow_failure: false
+  resource_group: production
+  needs:
+    - "release image"
+    - "B/G production"
+    - "check alerts"
+
+.rollback:
+  extends: .ci_function
+  stage: post-deploy
+  tags:
+    - production
+    - switch
+  when: manual
+  variables:
+    GIT_STRATEGY: none
+    GREEN_BLUE_COUNT: 2
+  script:
+    - run_ci
+  only:
+    refs:
+      - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  resource_group: production
+
+.delete current deploy:
+  extends: rollback
+  stage: close
+  script:
+    - run_ci
+  needs: ["B/G production"]
+
+.close release:
+  extends: .ci_function
+  allow_failure: false
+  tags:
+    - close-release
+    - prod
+  stage: close
+  variables:
+    GREEN_BLUE_COUNT: 1
+    GIT_STRATEGY: clone
+  only:
+    refs:
+      - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - jira_issues_close $(jira_issues_get)
+    - set +e
+    - jira_version_release
+    - slack_notify_release "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - email_notify "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - docker_latest_tagging
+    - set -e
+    - merge_to_master
+    - green_blue_clean
+  when: manual
+#  start_in: 60 minutes
+  needs:
+    - "production switch"
+    - "release image"
+    - "B/G production"
+    - "check alerts"

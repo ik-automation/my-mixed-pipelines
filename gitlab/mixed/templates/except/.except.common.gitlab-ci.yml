@@ -1,0 +1,71 @@
+########### development ##################
+
+.development:
+  except:
+    - tags
+    - branches
+
+.development switch:
+  except:
+    - tags
+    - branches
+
+.clean development:
+  except:
+    - tags
+    - branches
+
+########### staging ######################
+
+.merge master:
+  except:
+    - tags
+    - branches
+
+.helm check:
+  except:
+    - tags
+    - branches
+
+.staging:
+  except:
+    - tags
+    - branches
+
+.staging cron:
+  allow_failure: false
+
+.staging switch:
+  except:
+    - tags
+    - branches
+
+.create release:
+  except:
+    - tags
+    - branches
+
+.staging clean:
+  except:
+    - tags
+    - branches
+
+.staging latest:
+  except:
+    - tags
+    - branches
+
+########### production ######################
+
+.production cron:
+  allow_failure: false
+
+.production:
+  except:
+    - tags
+    - branches
+
+.close release:
+  except:
+    - tags
+    - branches

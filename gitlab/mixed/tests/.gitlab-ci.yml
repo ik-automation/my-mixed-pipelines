@@ -1,0 +1,46 @@
+include:
+  - local: .docker-build.gitlab-ci.yml
+
+stages:
+  - build
+  - lint
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "parent_pipeline"'
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "webide"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+
+build linter:
+  extends: .kaniko-build
+  stage: build
+  variables:
+    IMAGE_NAME: "gll"
+    CONTEXT: "./tests"
+    VERSION: "latest"
+    DOCKERFILE_PATH: "./tests/Dockerfile"
+  rules:
+    - if: $CI_COMMIT_REF_SLUG == "master"
+      when: manual
+      allow_failure: true
+    - when: never
+
+lint:
+  stage: lint
+  tags: ["lint","k8s"]
+  image: $CI_REGISTRY_IMAGE/gll:latest
+  variables:
+    GITLAB_LINT_TOKEN: "${GITLAB_API_TOKEN}"
+  script:
+    - sed -i "s|{{CI_COMMIT_REF_NAME}}|$CI_COMMIT_REF_NAME|g" tests/yamls/*
+    - for file in tests/yamls/*.yml; do echo "check $file"; gll --path "$file"; done
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
+    - when: always

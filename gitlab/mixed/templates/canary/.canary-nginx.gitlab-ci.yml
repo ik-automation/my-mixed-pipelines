@@ -1,0 +1,229 @@
+.canary:
+  extends:
+    - .switch
+    - .register_service
+  stage: canary
+  tags:
+    - production
+    - deploy
+  variables:
+    IMAGE_RELEASE: "true"
+    SKIP_LATEST_TAGGING: "true"
+    SELECTOR_TAG: "${CI_PIPELINE_IID}"
+  only:
+    refs:
+      - tags
+    variables:
+      - $CANARY == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - deploy_canary "$SERVICE_NAME"-"$CI_PIPELINE_IID"
+    - canary_weight "${SERVICE_NAME}-canary"
+    - deploy_annotationsd "${SERVICE_NAME}-canary"
+  environment:
+    name: production
+    url:  http://$SERVICE_NAME-canary.prod.a.o3.ru
+  when: manual
+  resource_group: production
+
+.canary 0%:
+  extends: .canary
+  variables:
+    CANARY_WEIGHT: "0"
+
+.canary 20%:
+  extends: .canary
+  variables:
+    CANARY_WEIGHT: "20"
+
+.canary 40%:
+  extends: .canary
+  variables:
+    CANARY_WEIGHT: "40"
+
+.canary 80%:
+  extends: .canary
+  variables:
+    CANARY_WEIGHT: "80"
+
+.canary 100%:
+  extends: .canary
+  variables:
+    CANARY_WEIGHT: "100"
+
+.delete current deploy:
+  extends: .ci_function
+  stage: close
+  tags:
+    - production
+    - switch
+  when: manual
+  variables:
+    CANARY_WEIGHT: "0"
+  script:
+    - run_ci
+  only:
+    refs:
+      - tags
+    variables:
+      - $CANARY == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  resource_group: production
+  needs:
+    - "release image"
+
+.production switch:
+  extends: .switch
+  stage: post-deploy
+  tags:
+    - production
+    - switch
+  variables:
+    SELECTOR_TAG: "${CI_PIPELINE_IID}"
+    BLUE_GREEN: "yes"
+    CANARY_WEIGHT: "0"
+    DISABLE_CHECK_DOCKER_IMAGE: "yes"
+  only:
+    refs:
+      - tags
+    variables:
+      - $CANARY == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+      - $CANARY_V2
+  script:
+    - k8s_default_svc "$SERVICE_NAME"
+    - k8s_default_ver "$SERVICE_NAME"
+    - canary_weight "${SERVICE_NAME}-canary"
+  environment:
+    name: default-production
+    url:  http://$SERVICE_NAME.prod.a.o3.ru
+  when: manual
+  allow_failure: false
+  resource_group: production
+  needs:
+    - "canary 100%"
+    - "release image"
+    - "check alerts"
+
+.rollback:
+  extends: .ci_function
+  stage: post-deploy
+  tags:
+    - production
+    - switch
+  when: manual
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - run_ci
+  only:
+    refs:
+      - tags
+    variables:
+      - $CANARY == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+      - $CANARY_V2
+  resource_group: production
+
+.close release:
+  extends: .ci_function
+  allow_failure: false
+  tags:
+    - close-release
+    - prod
+  stage: close
+  variables:
+    GREEN_BLUE_COUNT: 1
+    GIT_STRATEGY: clone
+  only:
+    refs:
+      - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG == "staging"
+      - $DEPLOY_TAG == "development"
+      - $CANARY_V2
+  script:
+    - jira_issues_close $(jira_issues_get)
+    - set +e
+    - jira_version_release
+    - slack_notify_release "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - email_notify "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - set -e
+    - docker_latest_tagging
+    - merge_to_master
+    - green_blue_clean
+  when: manual
+  #  start_in: 60 minutes
+  needs:
+    - "production switch"
+    - "canary 100%"
+    - "release image"
+    - "check alerts"
+
+.close release v2:
+  extends: .switch
+  allow_failure: false
+  tags:
+    - close-release
+    - prod
+  stage: close
+  variables:
+    SELECTOR_TAG: "${CI_PIPELINE_IID}"
+    BLUE_GREEN: "yes"
+    CANARY_WEIGHT: "0"
+    GREEN_BLUE_COUNT: 1
+    GIT_STRATEGY: clone
+    DISABLE_CHECK_DOCKER_IMAGE: "yes"
+  only:
+    refs:
+      - tags
+    variables:
+      - $CANARY == "yes" && $CANARY_V2 == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG == "staging"
+      - $DEPLOY_TAG == "development"
+  script:
+    - k8s_default_svc "$SERVICE_NAME"
+    - k8s_default_ver "$SERVICE_NAME"
+    - canary_weight "${SERVICE_NAME}-canary"
+    - jira_issues_close $(jira_issues_get)
+    - set +e
+    - jira_version_release
+    - slack_notify_release "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - email_notify "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - set -e
+    - docker_latest_tagging
+    - merge_to_master
+    - green_blue_clean
+  when: manual
+  resource_group: production
+  environment:
+    name: default-production
+    url:  http://$SERVICE_NAME.prod.a.o3.ru
+#  start_in: 60 minutes
+  needs:
+    - "canary 100%"
+    - "release image"
+    - "check alerts"

@@ -1,0 +1,38 @@
+# TRIVY
+
+.trivy_scan:
+  image:
+    name: gitlab-registry.shops.com/security/trivy:master
+    entrypoint: [""]
+  variables:
+    TRIVY_AUTH_URL: $CI_REGISTRY
+    TRIVY_USERNAME: gitlab-ci-token
+    TRIVY_PASSWORD: $CI_JOB_TOKEN
+  script:
+    - >
+      if [ "$IMAGE_NAME" == "" ]; then
+        export IMAGE_NAME="${CI_COMMIT_REF_SLUG}"
+      fi
+    - >
+      if [ "${IMAGE_TAG}" == "" ]; then
+        export IMAGE_TAG="${CI_COMMIT_SHORT_SHA}"
+      fi
+    - >
+      if [[ "${ROOT_IMAGE}" == "true" ]]; then
+        IMAGE_FULL_DESTINATION="${CI_REGISTRY_IMAGE}:${IMAGE_TAG}"
+      else
+        IMAGE_FULL_DESTINATION="${CI_REGISTRY_IMAGE}/${IMAGE_NAME}:${IMAGE_TAG}"
+      fi
+    - echo "${IMAGE_FULL_DESTINATION}"
+    - trivy --exit-code 1 --ignore-unfixed --clear-cache --skip-update --severity HIGH,CRITICAL --quiet "${IMAGE_FULL_DESTINATION}"
+  allow_failure: true
+
+# DTRACK
+
+.dtrack:
+  variables:
+    DTRACK_API_URL: "https://dtrack.o3.ru"
+  timeout: 5 minutes
+  tags:
+    - dtrack
+  allow_failure: true

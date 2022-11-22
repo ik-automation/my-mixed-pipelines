@@ -1,0 +1,11 @@
+include:
+  - local: "/pci-dss/.common.gitlab-ci.yml"
+
+close release:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: .post
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(release|hotfix)(\/.+)?$/'
+      when: manual

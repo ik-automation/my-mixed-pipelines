@@ -1,0 +1,13 @@
+.template nexus-deploy:
+  image: gitlab-registry.shops.com/docker/python-twine:1.0.0
+  variables:
+    TWINE_REPOSITORY_URL: https://nexus.s.o3.ru/repository/pypi-internal/
+    TWINE_USERNAME: guest
+    TWINE_PASSWORD: guest
+  script:
+    - python3 setup.py sdist
+    - twine upload  dist/*
+
+.deploy:
+  extends: .template nexus-deploy
+  when: manual

@@ -1,0 +1,64 @@
+.canary:
+  extends: .k8s_deploy
+  variables:
+    IMAGE_RELEASE: "false"
+    CANARY: "yes"
+  tags:
+    - development
+    - deploy
+  script:
+    - check_resources
+    - deploy_config
+    - canary "${SERVICE_NAME}-${CI_COMMIT_REF_SLUG}"
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+    variables:
+      - $DEPLOY_TAG
+  when: manual
+  allow_failure: true
+  resource_group: production
+
+.canary 20%:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=20 --set productionDeployment.weight=80"
+
+.canary 40%:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=40 --set productionDeployment.weight=60"
+
+.canary 80%:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=80 --set productionDeployment.weight=20"
+
+.canary 100%:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=100 --set productionDeployment.weight=0"
+
+.canary 100% update prod:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=100 --set productionDeployment.weight=0"
+    DEPLOY_PROD: "yes"
+
+.prod 100%:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=0 --set productionDeployment.weight=100"
+
+.rollout:
+  extends: .canary
+  variables:
+    HELM_CANARY: "--set canaryDeployment.weight=0 --set productionDeployment.weight=100"
+    ROLLOUT: "yes"
+
+.development switch:
+  allow_failure: true

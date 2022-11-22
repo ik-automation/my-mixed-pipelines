@@ -1,0 +1,49 @@
+.go:
+  image: gitlab-registry.shops.com/docker/golang/go-builder:$GO_VERSION
+  stage: build
+  cache:
+    key: "go-modules-cache"
+    paths:
+      - .cache/go/pkg/mod/cache/download
+      - .cache/gocache/*/*
+      - .cache/gocache/trim.txt
+      - .cache/golangci-lint
+  before_script:
+    - git config --global credential.helper store && echo "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.shops.com" > ~/.git-credentials
+    - export GOPATH=${CI_PROJECT_DIR}/.cache/go
+    - export GOCACHE=${CI_PROJECT_DIR}/.cache/gocache
+    - export CC=gcc
+    - export GOPROXY=https://athens.s.o3.ru
+    - export GOSUMDB=off
+
+.build:
+  extends: .go
+  tags: [build]
+  script:
+    - make build
+  except:
+    - tags
+  artifacts:
+    paths:
+      - bin/
+    expire_in: 1 day
+
+.test:
+  extends: .go
+  tags: [tests]
+  script:
+    # https://github.com/jstemmer/go-junit-report/issues/71
+    - set -o pipefail; go test -v ./... -covermode count -coverprofile=cover.out 2>&1  | tee /dev/stderr | go-junit-report -set-exit-code > junit.xml
+    - go tool cover -func cover.out
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+  coverage: /^total:\s+\(statements\)\s+\d+.\d+%$/
+  allow_failure: false
+  rules:
+    - if: '$DEPLOY_TAG || $CI_COMMIT_TAG || $CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^(hotfix\/.+)$/'
+      allow_failure: true
+    - when: always

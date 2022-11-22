@@ -1,0 +1,56 @@
+merge
+create image
+merge master
+ready to prod
+release
+create release
+create mr
+check jira flow
+warning
+error
+close release
+merge to active releases
+helm check
+registry clean
+deploy to staging
+release image
+validate config
+delete merged branches
+create image:nginx
+release nginx
+Finish
+Finish Minor
+Start Minor
+Ready to STG
+Ready to PROD
+Create RELEASE
+Update Refs
+Sync
+Build DEV
+Build STG
+Build PROD
+Do DEV
+Undo DEV
+Do STG
+Undo STG
+Do PROD
+Send DBA
+MR to Release STG
+update configs
+create cron image
+Finish Feature
+merge branches
+check alerts
+validate
+linter ozon-goban
+linter gauze
+#Временно
+Create jira RELEASE
+merge develop
+merge to develop
+check pg-entrypoint
+check vault scheme
+testnewrunner
+keycloak:dev
+keycloak:stg
+keycloak:prod

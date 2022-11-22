@@ -1,0 +1,4 @@
+include:
+  - project: 'pub/ci'
+    ref: '{{CI_COMMIT_REF_NAME}}'
+    file: '/pci-dss/.deb.gitlab-ci.yml'

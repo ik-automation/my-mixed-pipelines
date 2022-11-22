@@ -1,0 +1,124 @@
+include:
+  - local: "/.common.gitlab-ci.yml"
+  - local: "/pci-dss/.common.gitlab-ci.yml"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "parent_pipeline"'
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "webide"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+variables:
+  SINGLE_DEPLOY: "true"
+
+.prod: &prod
+  image: "${CI_IMAGE}"
+  tags: ["pcidss","prod", "docker", "dmz"]
+
+.stg: &stg
+  image: "${CI_IMAGE}"
+  tags: ["pcidss","stg", "docker", "dmz"]
+
+.no stg prod: &no_stg_prod
+  except:
+    - /^(release|hotfix)\/.+$/
+    - tags
+    - merge_requests
+
+.build release:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: build
+
+verify:
+  extends:
+    - .pci-dss job
+    - create release
+    - .prod
+  variables:
+    GIT_STRATEGY: fetch
+  only:
+  - merge_requests
+  - /^(release|hotfix)\/.+$/
+
+# Make MR pipeline to have at least one job not on '.pre' or '.post' stages to tell gitlab 'you should run this'
+merge:
+  stage: close
+  
+# Move 'merge master' job into PCI-DSS perimeter because we don't trust keys outside
+merge master:
+  <<: *prod
+  variables:
+    GIT_STRATEGY: fetch
+
+build release dotnet:
+  extends: .build release
+  image: '${DOTNET_IMAGE}'
+  artifacts:
+    paths:
+      - 'artifacts/'
+      - 'Dockerfile'
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ /^(release|hotfix)\/.+$/'
+      exists:
+      - "**.sln"
+
+build release go:
+  extends: 
+    - .build release
+    - .prod
+  image: "$GO_IMAGE"
+  artifacts:
+    paths:
+      - 'bin/'
+  cache:
+    key: 'go-modules-cache'
+    paths:
+      - '.cache/'
+    policy: 'pull-push'
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ /^(release|hotfix)\/.+$/ || $CI_COMMIT_REF_NAME == "master"'
+      exists:
+      - "go.mod"
+
+create image pcidss:
+  extends:
+    - create image
+    - .prod
+  except: []
+  only:
+    - /^(release|hotfix)\/.+$/
+  dependencies: [build release dotnet, build release go]
+
+staging:
+  <<: *stg
+
+release image:
+  <<: *prod
+  variables:
+    GIT_STRATEGY: fetch
+
+production:
+  <<: *prod
+
+# disabled
+
+create image:
+  <<: *no_stg_prod
+
+registry clean:
+  <<: *no_stg_prod
+
+helm check:
+  only: ["external"]
+
+close release:
+  needs: []
+security scan:
+  only: ["external"]

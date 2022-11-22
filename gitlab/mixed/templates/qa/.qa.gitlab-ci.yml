@@ -1,0 +1,59 @@
+.migrate_dev:
+  rules:
+    - if: '$MIGRATION_FOLDER && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix|qa|test)\/.+|release|stable|trunk)$/'
+      when: manual
+    - when: never
+.dev_deploy:
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix|qa|test)\/.+$/
+      - stable
+      - trunk
+      - release
+    variables:
+      - $CANARY == "yes"
+.infra-dev:deploy:
+  rules:
+    - if: '$INFRA_DEPLOY == "yes" && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix|qa|test)\/.+|release|stable|trunk)$/'
+      when: manual
+    - when: never
+.infra-dev:delete:
+  except:
+    - tags
+    - /^(release|hotfix|qa|test)\/.+$/
+    - stable
+    - trunk
+    - release
+.development switch:
+  except:
+    refs:
+      - /^(release|hotfix|qa|test)\/.+$/
+      - stable
+      - trunk
+      - release
+      - tags
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "development"
+.dev_clean:
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix|qa|test)\/.+$/
+      - stable
+      - trunk
+
+.create image:
+  except:
+    refs:
+      - tags
+    variables:
+      - $ENABLE_QA_IMAGE != "yes" && $CI_COMMIT_REF_NAME =~ /^(qa|test)\/.+$/
+
+.registry clean:
+  except:
+    refs:
+      - tags
+    variables:
+      - $ENABLE_QA_IMAGE != "yes" && $CI_COMMIT_REF_NAME =~ /^(qa|test)\/.+$/

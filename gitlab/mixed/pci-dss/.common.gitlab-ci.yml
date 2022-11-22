@@ -1,0 +1,21 @@
+image: '${CI_IMAGE}'
+
+.pci-dss job:
+  script: exit 1
+
+.stg:
+  image: '${CI_IMAGE}'
+  tags: ["pcidss", "dmz", "docker", "stg"]
+
+.prod:
+  image: '${CI_IMAGE}'
+  tags: ["pcidss", "dmz", "docker", "prod"]
+
+merge:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: .post
+  rules:
+    - if: "$CI_MERGE_REQUEST_ID"
+      when: manual

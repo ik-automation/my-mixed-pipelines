@@ -1,0 +1,82 @@
+include:
+  - local: "/pci-dss/.packages.gitlab-ci.yml"
+
+stages:
+  - test
+  - build
+  - publish
+  - deploy
+
+#
+# IMAGE
+#
+.deb_build_image:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: .pre
+  variables:
+    IMAGE_PATH: '${BUILD_IMAGE_NAME}'
+    IMAGE_TAG: '${CI_COMMIT_REF_SLUG}'
+    DOCKERFILE_PATH: './images/${BUILD_IMAGE_NAME}/Dockerfile'
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID'
+      when: never
+    - changes:
+      - images/**/Dockerfile
+      - src/**/*
+      - src/*
+    - if: '$CREATE_IMAGES == "true" || $CI_COMMIT_REF_NAME == "master"'
+
+#
+# BUILD
+#
+.release:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: build
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(release|hotfix)(\/.+)?$/'
+
+.deb_build_package:
+  extends:
+    - .pci-dss job
+    - .prod
+  image: '${REGISTRY}/${CI_PROJECT_PATH_SLUG}/${BUILD_IMAGE_NAME}:${CI_COMMIT_REF_SLUG}'
+  stage: build
+  variables:
+    BUILD_DIR: 'deb-pkg'
+    BUILD_RESULTS_DIR: '${CI_PROJECT_DIR}/debs'
+  artifacts:
+    paths:
+      - '${BUILD_RESULTS_DIR}'
+    expire_in: '1 day'
+
+verify:
+  extends: .release
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(release|hotfix)(\/.+)?$/'
+    - if: '$CI_MERGE_REQUEST_ID'
+
+#
+# PUBLISH
+#
+.publish:
+  extends:
+    - .pci-dss job
+  image: '${CI_IMAGE}'
+  stage: publish
+
+publish:
+  extends:
+    - .prod
+    - .publish
+
+publish prod:
+  extends:
+    - .prod
+    - .publish
+  only:
+    - /^(release|hotfix)\/.+$/
+  when: manual

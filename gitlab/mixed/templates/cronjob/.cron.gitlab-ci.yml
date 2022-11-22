@@ -1,0 +1,81 @@
+include:
+  - local: ".disabled.common.gitlab-ci.yml"
+
+.only_ref_branches: &only_ref_branches
+  only:
+    refs:
+      - branches
+
+.only_ref_tags: &only_ref_tags
+  only:
+    refs:
+      - tags
+
+.only_cronjob_dev: &only_cronjob_dev
+  only:
+    variables:
+      - $CRONJOB == "yes"
+
+.only_cronjob_stg: &only_cronjob_stg
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $CRONJOB == "yes"
+
+.only_cronjob_prod: &only_cronjob_prod
+  only:
+    refs:
+      - tags
+    variables:
+      - $CRONJOB == "yes"
+##### Common jobs #####
+create image:
+  <<: *only_ref_branches
+
+.registry clean:
+  <<: *only_ref_branches
+
+.release image:
+  <<: *only_ref_tags
+
+.close release:
+  <<: *only_ref_tags
+  needs: ["production cron"]
+
+.delete merged branches:
+  only:
+    refs:
+      - master
+##### Development cron #####
+.development cron:
+  <<: *only_cronjob_dev
+.dev clean cron:
+  <<: *only_cronjob_dev
+.start job development:
+  <<: *only_cronjob_dev
+##### Staging cron #####
+.staging cron:
+  <<: *only_cronjob_stg
+.staging clean cron:
+  <<: *only_cronjob_stg
+.start job staging:
+  <<: *only_cronjob_stg
+##### Production cron #####
+.production cron:
+  <<: *only_cronjob_prod
+.production clean cron:
+  <<: *only_cronjob_prod
+.start job production:
+  <<: *only_cronjob_prod
+.ready to prod:
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
