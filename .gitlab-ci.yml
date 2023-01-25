@@ -1,0 +1,11 @@
+# https://gitlab.com/HnBI/platform-as-a-service/common-resources/gitlab-ci-snippets/-/blob/master/rules/.gitlab-ci.yml
+
+.schedule-never: &schedule-never
+  if: '$CI_PIPELINE_SOURCE == "schedule"'
+  when: never
+
+.trigger-master: &trigger-master
+  if: '$CI_COMMIT_BRANCH == "master"'
+
+.trigger-mr-master: &trigger-mr-master
+  if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
