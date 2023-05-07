@@ -1,0 +1,19 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/.gitlab/ci/docker.images.yml
+# Docker image with buildx plugin
+.docker:
+  extends:
+    - .build_dynamic_image
+  variables:
+    DOCKER: '23.0.1'
+  rules:
+    - !reference [.build_dynamic_image, rules]
+    - changes:
+        - "scripts/lib/custom-docker-build"
+        - ".gitlab/ci/docker.images.yml"
+
+docker:
+  extends:
+    - .docker
+  parallel:
+    matrix:
+      - OS: ['debian:bullseye', 'debian:bullseye-slim']

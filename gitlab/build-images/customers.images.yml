@@ -1,0 +1,40 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/.gitlab/ci/customers.images.yml
+---
+.customers:
+  extends:
+    - .build_dynamic_image
+  rules:
+    - !reference [.build_dynamic_image, rules]
+    - changes:
+        - "scripts/lib/custom-docker-build"
+        - ".gitlab/ci/customers.images.yml"
+
+# Used by customers-gitlab-com rspec job: https://gitlab.com/gitlab-org/customers-gitlab-com/-/blob/staging/.gitlab-ci.yml
+customers:
+  extends:
+    - .customers
+  variables:
+    LFS: '2.9'
+    CHROME: '111'
+    NODE: '16.14'
+    YARN: '1.22'
+    POSTGRESQL: '12'
+    GIT: '2.36'
+  parallel:
+    matrix:
+      - RUBY: ['2.7', '3.2']
+        DOCKER: ['20.10.14', '']
+
+# Used by customers-gitlab-com qa e2e test: https://gitlab.com/gitlab-org/customers-gitlab-com/-/blob/staging/.gitlab/ci/e2e.gitlab-ci.yml
+customers-qa-assets:
+  extends:
+    - .customers
+  variables:
+    CHROME: '111'
+    NODE: '16.14'
+    YARN: '1.22'
+    GIT: '2.36'
+  parallel:
+    matrix:
+      - RUBY: ['2.7', '3.2']
+        DOCKER: ['20.10.14', '']
