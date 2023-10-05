@@ -1,0 +1,76 @@
+# https://gitlab.com/gitlab-org/gitlab-runner/-/issues/16097
+
+image: private-repo.my-company.com/public/gitlab/gitlab-runner:alpine-v14.2.0
+imagePullPolicy: Always
+replicas: 3
+gitlabUrl: https://gitlab.my-company.com/
+runnerRegistrationToken: "XXXX"
+unregisterRunners: true
+terminationGracePeriodSeconds: 600
+
+concurrent: 30
+checkInterval: 10
+
+rbac:
+  create: true
+  rules: []
+  clusterWideAccess: false
+  podSecurityPolicy:
+    enabled: false
+    resourceNames:
+    - gitlab-runner
+
+metrics:
+  enabled: true
+
+runners:
+  config: |
+    [[runners]]
+      [runners.kubernetes]
+        image = "private-repo.my-company.com/public/ubuntu:18.04"
+        pull_policy = ["always"]
+        [runners.cache]
+          Type = "s3"
+          Path = ""
+          Shared = false
+          [runners.cache.s3]
+            ServerAddress = "minio-k8s.my-company.com"
+            BucketName = "gitlab-runner"
+            BucketLocation = "none"
+            Insecure = false
+
+  cache:
+      secretName: minio
+
+  locked: false
+  tags: "k8s-small-generic"
+  name: "k8s-v2"
+  runUntagged: true
+
+  namespace: gitlab-runner
+  cache: {}
+  builds:
+    cpuLimit: 2000m
+    memoryLimit: 10Gi
+    cpuRequests: 2000m
+    memoryRequests: 2Gi
+  env:
+    HTTP_PROXY: "http://my-proxy.my-company.com"
+    HTTPS_PROXY: "http://my-proxy.my-company.com"
+    NO_PROXY: "127.0.0.1,localhost,gitlab.my-company.com,10.0.0.0/8"
+    http_proxy: "http://my-proxy.my-company.com"
+    https_proxy: "http://my-proxy.my-company.com"
+    no_proxy: "127.0.0.1,localhost,gitlab.my-company.com,10.0.0.0/8"
+
+securityContext:
+  runAsUser: 100
+  fsGroup: 65533
+
+envVars:
+  - name: RUNNER_EXECUTOR
+    value: kubernetes
+
+hostAliases:
+  - ip: "x.x.x.x"
+    hostnames:
+    - "my-proxy.my-company.com"

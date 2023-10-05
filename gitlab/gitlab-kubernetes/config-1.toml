@@ -1,0 +1,53 @@
+# https://gitlab.com/gitlab-org/gitlab-runner/-/issues/30230
+[[runners]]
+environment = ["DOCKER_AUTH_CONFIG={\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"{{ `{{ssm /service/prod/gitlab/DOCKER_AUTH_TOKEN eu-central-1}}` }}\"}}}"]
+[runners.kubernetes]
+  image = "ubuntu:22.04"
+
+  # THIS MUST GO. USE KANIKO TO BUILD CONTAINERS.
+  privileged = true
+
+  service_account = "gitlab-jobs"
+
+  # after that many seconds the job fails if the container is not ready by then.
+  # crazy long, because because of one of our service's startup time on fargate.
+  poll_timeout = 600
+
+  cpu_limit = "3"
+  cpu_request = "500m"
+  memory_limit = "8Gi"
+  memory_request = "500Mi"
+
+  helper_cpu_limit = "250m"
+  helper_cpu_request = "250m"
+  helper_memory_limit = "8Gi"
+  helper_memory_request = "128Mi"
+
+  service_cpu_limit = "4"
+  service_cpu_request = "200m"
+  service_memory_limit = "8Gi"
+  service_memory_request = "128Mi"
+
+  [runners.kubernetes.pod_labels]
+    "gitlab.com/project-id" = "${CI_PROJECT_ID}"
+    "gitlab.com/project-name" = "${CI_PROJECT_NAME}"
+    "gitlab.com/project-path" = "${CI_PROJECT_PATH}"
+    "job.runner.gitlab.com/runner-name" = "cluster"
+
+  [runners.kubernetes.pod_annotations]
+    "job.runner.gitlab.com/pipeline-url" = "${CI_PIPELINE_URL}"
+
+[runners.cache]
+  Type = "s3"
+  Path = "runners-all"
+  Shared = true
+  [runners.cache.s3]
+    ServerAddress = "s3.amazonaws.com"
+    BucketName = "our-company-gitlab-runner-cache"
+    BucketLocation = "eu-central-1"
+    Insecure = false
+
+[[runners.kubernetes.volumes.empty_dir]]
+  name = "docker-certs"
+  mount_path = "/certs/client"
+  medium = "Memory"
