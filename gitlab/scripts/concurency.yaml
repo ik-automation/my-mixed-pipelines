@@ -1,0 +1,43 @@
+# Prevent multiple simultaneous pipelines from running on the same branch
+example_script:
+  stage: build
+  tags:
+    - example
+  image: example-ci:latest
+  variables:
+    API_REQUEST_URL: "https://gitlab.example.com/api/v4/projects/$CI_PROJECT_ID/pipelines?ref=$CI_COMMIT_REF_NAME&status=running"
+  script:
+    - COUNTER=0
+    - RETRY_COUNT=10
+    - SLEEP_TIME=10
+    - >-
+      if ! PIPELINES=$(jq -r '.[].id' <<< $(curl -s -H 'Content-Type: application/json' -H 'PRIVATE-TOKEN: '"$YOUR_API_TOKEN"'' ''"$API_REQUEST_URL"'') >> /dev/null 2>&1); then
+        echo "Error in API request:" &&
+        curl -s -H 'Content-Type: application/json' -H 'PRIVATE-TOKEN: '"$YOUR_API_TOKEN"'' ''"$API_REQUEST_URL"'' || true &&
+        echo "" &&
+        exit 1
+      fi
+    - >-
+      while ((COUNTER < RETRY_COUNT)); do
+        PIPELINES=$(jq -r '.[].id' <<< $(curl -s -H 'Content-Type: application/json' -H 'PRIVATE-TOKEN: '"$YOUR_API_TOKEN"'' ''"$API_REQUEST_URL"''))
+        if [[ -n "$PIPELINES" ]]; then
+          OLDER_PIPELINE=0
+          for i in $PIPELINES; do
+            if ((i < CI_PIPELINE_ID)); then
+              OLDER_PIPELINE=$i
+              break
+            fi
+          done
+          if ((OLDER_PIPELINE != 0)); then
+            echo "Waiting for $CI_PROJECT_URL/pipelines/$OLDER_PIPELINE pipeline to end. Sleep for $SLEEP_TIME" &&
+            sleep $SLEEP_TIME
+            ((++COUNTER));
+          else
+            break
+          fi
+        else
+          break
+        fi
+      done
+    - if ((COUNTER >= RETRY_COUNT)); then echo "$CI_PROJECT_URL/pipelines/$OLDER_PIPELINE is still running after $((SLEEP_TIME * RETRY_COUNT)) seconds. Timeout" && exit 1; fi
+    - echo "If you see this, everything is ok"

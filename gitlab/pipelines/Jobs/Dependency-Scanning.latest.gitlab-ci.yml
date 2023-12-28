@@ -189,7 +189,7 @@ gemnasium-python-dependency_scanning:
           $CI_GITLAB_FIPS_MODE == "true"
       variables:
         DS_IMAGE_SUFFIX: "-fips"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" &&
+      $CI_PIPELINE_SOURCE == "merge_request_event" &&
           $GITLAB_FEATURES =~ /\bdependency_scanning\b/ &&
           $PIP_REQUIREMENTS_FILE
 
