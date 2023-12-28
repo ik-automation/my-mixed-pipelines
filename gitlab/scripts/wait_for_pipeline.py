@@ -1,5 +1,7 @@
 #!/bin/python3
 
+# Another example https://gitlab.com/inorton/gitlab-throttle
+
 '''
 wait-for-resources:
   stage: wait-for-resources

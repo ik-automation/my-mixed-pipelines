@@ -15,7 +15,15 @@ after_script:
 scripts:
   - consul lock -http-addr=${CONSUL_HOST} --timeout 30m ${BRANCH_LOCK} scripts/docker/run_tests.sh --tag=capybara
 
-or
+before_script:
+  - '[ "${CI_COMMIT_REF_NAME}" = "${CI_COMMIT_TAG}" ] || (
+    [ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && (
+    echo "A newer job is already running. Exiting..." && exit 0) || echo "ok")'
+after_script:
+  - '[ "${CI_COMMIT_REF_NAME}" = "${CI_COMMIT_TAG}" ] || (
+    [ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && (
+    echo "A newer job is already running. Exiting..." && exit 0) || echo "ok")'
+
 
 scripts:
   - consul lock -http-addr=${CONSUL_HOST} --timeout 30m ${ENV_LOCK} cap dev deploy
