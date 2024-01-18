@@ -1,0 +1,133 @@
+# https://github.com/opentofu/opentofu/blob/main/.github/workflows/release.yml
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag (leave empty for dry run)"
+        required: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    environment: gpg
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+
+    steps:
+      - name: Set up QEMU cross build support
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        if: startsWith(inputs.tag, 'v')
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: Fetch tags
+        run: git fetch --force --tags
+
+      - name: Compare versions
+        if: startsWith(inputs.tag, 'v')
+        run: ./.github/scripts/compare-release-version.sh
+        env:
+          TARGET_VERSION: ${{inputs.tag}}
+
+      - name: Determine Go version
+        id: go
+        uses: ./.github/actions/go-version
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ steps.go.outputs.version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@main
+        with:
+          cosign-release: v2.2.0
+
+      - name: Setup snapcraft
+        run: |
+          sudo snap install snapcraft --classic --channel=7.x/stable
+
+          # See https://github.com/goreleaser/goreleaser/issues/1715
+          mkdir -p "$HOME/.cache/snapcraft/download"
+          mkdir -p "$HOME/.cache/snapcraft/stage-packages"
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_TOKEN }}
+
+      - name: Import GPG key
+        if: startsWith(inputs.tag, 'v')
+        run: |
+          GPG_KEY_FILE=/tmp/signing-key.gpg
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 --decode > "${GPG_KEY_FILE}"
+
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 --decode | gpg --import
+          GPG_FINGERPRINT=$(gpg --list-secret-keys --keyid-format LONG | awk '/^sec/{sub(/.*\//, "", $2); print $2; exit}')
+
+          echo "GPG_FINGERPRINT=${GPG_FINGERPRINT}" >>"${GITHUB_ENV}"
+          echo "GPG_KEY_FILE=${GPG_KEY_FILE}" >> "${GITHUB_ENV}"
+        env:
+          GPG_TTY: /dev/ttys000  # Set the GPG_TTY to avoid issues with pinentry
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v4
+        with:
+          version: v1.21.2
+          args: release --clean --timeout=60m --snapshot=${{ !startsWith(inputs.tag, 'v') }}
+        env:
+          # Note: the GPG_FINGERPRINT and GPG_KEY_FILE are defined in the task above. If they are not set,
+          # goreleaser won't sign the packages.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_TOKEN }}
+
+      - name: Remove GPG key
+        if: always()
+        run: |
+          rm -rf ~/.gnupg
+          if [ -n "${GPG_KEY_FILE}" ]; then
+            rm -rf "${GPG_KEY_FILE}"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Upload Debian packages to PackageCloud
+        if: startsWith(inputs.tag, 'v')
+        uses: computology/packagecloud-github-action@v0.6
+        with:
+                PACKAGE-NAME: dist/*.deb
+                PACKAGECLOUD-USERNAME: opentofu
+                PACKAGECLOUD-REPONAME: tofu
+                PACKAGECLOUD-DISTRO: any/any
+                PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      - name: Upload RPM packages to PackageCloud
+        if: startsWith(inputs.tag, 'v')
+        uses: computology/packagecloud-github-action@v0.6
+        with:
+                PACKAGE-NAME: dist/*.rpm
+                PACKAGECLOUD-USERNAME: opentofu
+                PACKAGECLOUD-REPONAME: tofu
+                PACKAGECLOUD-DISTRO: rpm_any/rpm_any
+                PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
