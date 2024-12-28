@@ -32,3 +32,8 @@
 [owasp-zaproxy-full]:
 [benchmark]: https://github.com/search?o=desc&q=rhysd%2Fgithub-action-benchmark+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
 [semantic-release.v4]: https://github.com/search?o=desc&q=cycjimmy%2Fsemantic-release-action+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+
+
+### Cool Github Actions
+
+- [Google](https://github.com/GoogleCloudPlatform/nodejs-docs-samples/tree/main/.github/workflows)

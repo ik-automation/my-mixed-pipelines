@@ -1,0 +1,163 @@
+// Dependency Update Configuration
+//
+// See https://docs.renovatebot.com/configuration-options/
+// See https://json5.org/ for JSON5 syntax
+// https://github.com/GoogleCloudPlatform/samples-experiment/blob/main/renovate.json5
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended", // https://docs.renovatebot.com/presets-config/#configrecommended
+    ":semanticCommits", // https://docs.renovatebot.com/presets-default/#semanticcommits
+    ":ignoreUnstable", // https://docs.renovatebot.com/presets-default/#ignoreunstable
+    "group:allNonMajor", // https://docs.renovatebot.com/presets-group/#groupallnonmajor
+    ":separateMajorReleases", // https://docs.renovatebot.com/presets-default/#separatemajorreleases
+    ":prConcurrentLimitNone", // View complete backlog as PRs. https://docs.renovatebot.com/presets-default/#prconcurrentlimitnone
+    ":prNotPending", // https://docs.renovatebot.com/presets-default/#prnotpending
+    ":prHourlyLimitNone", // https://docs.renovatebot.com/presets-default/#prhourlylimitnone
+    "docker:enableMajor", // https://docs.renovatebot.com/presets-docker/#dockerenablemajor
+    // Renovate configuration per supported programming language.
+    // Originally these were included in packageRules in this file, with matching
+    // rules to ensure changes to the individual preset files could not leak.
+    // This practice throws unclear errors, despite theoretical support:
+    // https://github.com/renovatebot/renovate/issues/14974.
+    // Errors occur regardless of including 'packageRules' inside the preset,
+    // and matchNNN rules must sit inside packageRules statements.
+    //
+    // The following rules for language presets are:
+    // - Consistently use a matchNNN rule to silo all package rules
+    // - Ensure any global config would only impact owned language tooling
+    // - There may be rules in the future, such as limiting the number of groups
+    "github>GoogleCloudPlatform/samples-experiment//.samplesplatform/renovate/go.json5",
+    "github>GoogleCloudPlatform/samples-experiment//.samplesplatform/renovate/python.json5",
+    "github>GoogleCloudPlatform/samples-experiment//.samplesplatform/renovate/java.json5",
+    "github>GoogleCloudPlatform/samples-experiment//.samplesplatform/renovate/javascript.json5",
+    "github>GoogleCloudPlatform/samples-experiment//.samplesplatform/renovate/terraform.json5",
+  ],
+  // Synchronized with a 2 week sprint cycle and outside business hours.
+  // https://docs.renovatebot.com/configuration-options/#schedule
+  "schedule": [
+    "every 2 weeks on Saturday"
+  ],
+  // Give ecosystem time to catch up.
+  // npm allows maintainers to unpublish a release up to 3 days later.
+  // https://docs.renovatebot.com/configuration-options/#minimumreleaseage
+  "minimumReleaseAge": "3",
+  // Create PRs, but do not update them without manual action.
+  // Reduces spurious retesting in repositories that have many PRs at a time.
+  // https://docs.renovatebot.com/configuration-options/#rebasewhen
+  "rebaseWhen": "never",
+  // Organizational processes.
+  // https://docs.renovatebot.com/configuration-options/#dependencydashboardlabels
+  "dependencyDashboardLabels": [
+    "type: process",
+  ],
+  "labels": [
+    "automerge",
+  ],
+  // https://docs.renovatebot.com/configuration-options/#prbodynotes
+  "prBodyNotes": [
+    "Reviewer is responsible for dependency update. Ensure adequate automated",
+    "or manual testing is performed before merge.",
+  ],
+  "packageRules": [
+    // Report impact of a dependency update via PR label.
+    {
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "extends": [
+        "schedule:monthly"
+      ],
+      "labels": [
+        "semver: patch"
+      ],
+    },
+    {
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "extends": [
+        "schedule:quarterly"
+      ],
+      "labels": [
+        "semver: minor"
+      ],
+    },
+    {
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "labels": [
+        "semver: major"
+      ],
+    },
+    // Tooling & Runtime behaviors.
+    {
+      // Covers Dockerfiles, cloudbuild.yaml, and other docker-based tools.
+      "groupName": "Docker Runtimes",
+      "matchDatasources": [
+        "docker"
+      ],
+      // TODO: Uncomment if your Dockerfiles are not included in samples.
+      // Increases build repeatability, image cache use, and supply chain security.
+      // "pinDigests": true,
+    },
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true,
+    },
+    {
+      "matchCategories": [
+        "go"
+      ],
+      "extends": [
+        "local>.samplesplatform/renovate/go",
+      ],
+    },
+    {
+      "matchCategories": [
+        "python"
+      ],
+      "extends": [
+        "local>.samplesplatform/renovate/python",
+      ],
+    },
+    {
+      "matchCategories": [
+        "java"
+      ],
+      "extends": [
+        "local>.samplesplatform/renovate/java",
+      ],
+    },
+    {
+      "matchManagers": [
+        "terraform"
+      ],
+      "extends": [
+        "local>.samplesplatform/renovate/terraform",
+      ],
+    },
+    {
+      "matchCategories": [
+        "js",
+        "node"
+      ],
+      "extends": [
+        "local>.samplesplatform/renovate/javascript",
+      ],
+    },
+    // Updating coupled ecosystems.
+    {
+      "groupName": "Playwright",
+      "matchPackageNames": [
+        "playwright",
+        "@playwright/test",
+        "mcr.microsoft.com/playwright",
+      ],
+    },
+  ],
+}

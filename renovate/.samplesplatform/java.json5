@@ -1,0 +1,266 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "groupName": "Java --nonmajor",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^com.fasterxml.jackson.core:"
+      ],
+      "groupName": "Java - Jackson core packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^com.google.appengine:"
+      ],
+      "groupName": "Java - AppEngine packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^com.google.cloud.bigtable:"
+      ],
+      "groupName": "Java - Bigtable packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^com.google.cloud.sql:"
+      ],
+      "groupName": "Java - Cloud SQL connectors"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePrefixes": [
+        "com.google"
+      ],
+      "allowedVersions": "!/.+-sp\\.[0-9]+$/"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^org.apache.beam:"
+      ],
+      "groupName": "Java - Apache Beam packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "io.grpc:(?:protoc-gen-)?grpc-*"
+      ],
+      "groupName": "Java - gRPC packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^org.eclipse.jetty:"
+      ],
+      "groupName": "Java - Jetty packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^io.micronaut(?:\.validation)?:"
+      ],
+      "groupName": "Java - Micronaut packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^io.quarkus:"
+      ],
+      "groupName": "Java - Quarkus packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^io.vertx:"
+      ],
+      "groupName": "Java - Vertx packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^io.opencensus:"
+      ],
+      "groupName": "Java - OpenCensus packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^org.slf4j:"
+      ],
+      "groupName": "Java - SLF4J packages"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackageNames": [
+        "com.microsoft.sqlserver:mssql-jdbc"
+      ],
+      "allowedVersions": "/.+jre8.?/"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "scala"
+      ],
+      "enabled": false
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^spark-sql"
+      ],
+      "enabled": false
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^jackson-module-scala"
+      ],
+      "enabled": false
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "org.springframework.boot"
+      ],
+      "matchCurrentVersion": "!/.*[SNAPSHOT | M]/"
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackageNames": [
+        "com.google.apis:google-api-services-dataflow"
+      ],
+      // This package is no longer actively maintained. Use the version specified in https://github.com/googleapis/google-api-java-client-services/tree/main/clients/google-api-services-dataflow/v1b3
+      "enabled": false,
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "org.springframework.boot"
+      ],
+      "matchFileNames": [
+        "appengine-java11/**",
+        "appengine-java8/**",
+        "flexible/*",
+        "flexible/java-11/**",
+        "flexible/java-8/**",
+        "cloud-sql/**",
+        "monitoring/**",
+        "pubsub/spring/**",
+        "recaptcha_enterprise/**",
+        "run/endpoints-v2-backend/*",
+        "spanner/**",
+        "vision/**"
+      ],
+      // Spring Boot V3 requires Java 17
+      "allowedVersions": "<3",
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^org.eclipse.jetty:"
+      ],
+      "groupName": "Java - Jetty packages",
+      "allowedVersions": "<10",
+      "matchFileNames": [
+        "appengine-java8/**",
+        "appengine-java11/**",
+        "appengine-java17/**",
+        "flexible/java-8/**",
+        "iap/**",
+        "memorystore/redis/**",
+        "unittests/**"
+      ],
+      // Java 8 on App Engine supports servlets V3.1 and Jetty V9 https://cloud.google.com/appengine/docs/flexible/java/runtime. Folders appengine-java1* needs to be migrated
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackagePatterns": [
+        "^io.micronaut"
+      ],
+      "groupName": "Java - micronaut packages",
+      "allowedVersions": "<4",
+      "matchFileNames": [
+        "appengine-java11/**",
+        "flexible/java-11/**"
+      ],
+      // Micronaut V4 requires Java 17
+    },
+    {
+      "matchCategories": [
+        "java"
+      ], // DO NOT EDIT: Limits this file's configurations to Java code.
+      "matchPackageNames": [
+        "javax.servlet:javax.servlet-api"
+      ],
+      "allowedVersions": "3.1.0",
+      "matchFileNames": [
+        "appengine-java8/**",
+        "appengine-java11/**",
+        "appengine-java17/**",
+        "flexible/java-8/**",
+        "iap/**",
+        "session-handling/**",
+        "memorystore/redis/**",
+        "unittests/**"
+      ],
+      // Java 8 on App Engine supports servlets V3.1 and Jetty V9 https://cloud.google.com/appengine/docs/flexible/java/runtime. Folders appengine-java1* needs to be migrated
+    },
+  ],
+}
