@@ -1,0 +1,76 @@
+// https://codeberg.org/forgejo-contrib/forgejo-renovate/src/branch/main/renovate.json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "forgejo-contrib/forgejo-renovate//base.json"
+  ],
+  "assignees": [
+    "viceice"
+  ],
+  "packageRules": [
+    {
+      "description": "use fix scope for renovate updates",
+      "matchPackageNames": [
+        "code.forgejo.org/forgejo-contrib/renovate",
+        "ghcr.io/visualon/renovate"
+      ],
+      "groupName": "renovate",
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Automerge renovate updates",
+      "matchPackageNames": [
+        "code.forgejo.org/forgejo-contrib/renovate",
+        "ghcr.io/visualon/renovate"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Update renovate only weekly",
+      "matchDepNames": [
+        "code.forgejo.org/forgejo-contrib/renovate",
+        "ghcr.io/visualon/renovate"
+      ],
+      "extends": [
+        "schedule:weekly"
+      ]
+    },
+    {
+      "description": "Set minimum release age to 14 days for skopeo renovate sync",
+      "matchDepNames": [
+        "renovate-skopeo"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "14 days",
+      "extends": [
+        "schedule:weekly"
+      ],
+      "automerge": true
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "update skopeo renovate minimum version to sync",
+      "customType": "regex",
+      "fileMatch": [
+        "skopeo.yml"
+      ],
+      "matchStrings": [
+        "renovatebot\\/renovate: \">=(?<currentValue>\\d+\\.\\d+\\.\\d+)\"\\s"
+      ],
+      "depNameTemplate": "renovate-skopeo",
+      "packageNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    }
+  ]
+}

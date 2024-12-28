@@ -37,3 +37,4 @@
 ### Cool Github Actions
 
 - [Google](https://github.com/GoogleCloudPlatform/nodejs-docs-samples/tree/main/.github/workflows)
+- [Go Gitea](https://github.com/go-gitea/gitea/tree/main)
