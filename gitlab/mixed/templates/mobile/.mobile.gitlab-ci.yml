@@ -1,0 +1,88 @@
+.ci-job:
+  tags: [ci-jobs]
+
+.ci_function:
+  image: ${CI_REGISTRY}/docker/ci:latest
+  interruptible: false
+  dependencies: []
+  before_script:
+    - export PIPE_VERSION="0.0.5-mobile"
+    - export CI_VERSION="${CI_VERSION:-1.5.x}"
+    - echo "$CI_VERSION"
+    - eval "$(curl -s https://gitlab.shops.com/deploy/ci/-/raw/$CI_VERSION/functions.sh)"
+    - export VERSION="$(echo $CI_COMMIT_REF_NAME | grep -o [0-9].*)" && VERSION="$(echo $JIRA_PROJ | awk '{print tolower($0)}').$VERSION"
+    - echo "$VERSION"
+
+.merge master:
+  stage: .pre
+  extends:
+    - .ci_function
+    - .ci-job
+  script: merge_master
+  only:
+    - /^release/.*/
+
+#start release pipeline
+.create release:
+  stage: quality
+  extends:
+    - .ci_function
+    - .ci-job
+  only:
+    - /^release/.*/
+  script:
+    - delete_tags "$VERSION"
+    - set_tags "$VERSION"
+    - |
+      if [[ -n $JIRA_PROJ ]]; then
+        jira_version_create "$VERSION"
+      fi
+    - confluence_release_page
+
+  when: manual
+
+# set correct version to jira tickets
+.ready to prod:
+  stage: .pre
+  extends:
+    - .ci_function
+    - .ci-job
+  only:
+    - /^release/.*/
+  script:
+    - jira_issues_set_version "$VERSION"
+
+#merges release branch to master, closes jira release
+.close release:
+  stage: deploy
+  extends:
+    - .ci_function
+    - .ci-job
+  variables:
+    GIT_STRATEGY: none
+  only:
+    - /^(android|ios)\.[0-9].*/
+  script:
+    - jira_issues_close $(jira_issues_get)
+    - if [[ -n $JIRA_PROJ ]]; then jira_version_release "$VERSION"; fi
+    - slack_notify_release "$VERSION"
+    - merge_to_master
+    - deploy_annotationsd
+  when: manual
+  allow_failure: false
+
+.template ceph upload:
+  stage: prepare
+  extends: .ci_function
+  variables:
+    CEPH_HOST: "prod.s3.ceph.s.o3.ru:7480"
+    CEPH_HOST_BUCKET: mobile-ui-bucket
+    CEPH_FOLDER: Android
+    CEPH_FILE_NAME: releasec.apk
+    ARTIFACT_PATH: app/build/outputs/apk/prod/release/*.apk
+  only:
+    refs:
+      - develop
+  script:
+    - s3cmd --access_key=$ACCESS_KEY --secret_key=$SECRET_KEY --no-ssl --host-bucket=$CEPH_HOST_BUCKET.$CEPH_HOST --host=$CEPH_HOST put $(pwd)/$ARTIFACT_PATH s3://$CEPH_HOST_BUCKET/$CEPH_FOLDER/$CEPH_FILE_NAME
+  allow_failure: true

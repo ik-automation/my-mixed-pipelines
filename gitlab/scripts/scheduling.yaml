@@ -1,0 +1,24 @@
+# This would be really nice to have, among other improvements to CI, but I have a minimal solution in the interim that generally works without external queueing tools.
+# https://gitlab.com/gitlab-org/gitlab-foss/-/issues/41560
+# Caveats
+# 1. You have to provide an API token, the CI token can't query its own pipelines
+# 2. GITLAB_HOST needs to be defined as the HTTPS url to your gitlab. I'm surprised this isn't a variable. You could probably reverse-engineer it from the project URL as well, but with namespace nesting... This is safest.
+# 3. You need to be aware of the project's pipeline timeout. If this blocks long enough, CI will kill it. The retry is set to 2, so it will run 3 times in total before the entire pipeline is canceled. I don't see the ability to control the timeout for a single task in the CI docs, unfortunately.
+# 4. This will lock across all branches. You can probably get more fine-grained control out of the api, but @oz123's python-gitlab solution is probably better for that than trying to process the API from the command line.
+scheduling:
+  stage: L0
+  image: ${CI_REGISTRY}/util/util-container
+  retry: 2
+  script:
+    - |
+      printf 'Waiting...'
+      while true; do
+        READY=$(curl -sS --header "PRIVATE-TOKEN: ${ELEVATED_TOKEN}" "${GITLAB_HOST}/api/v4/projects/${CI_PROJECT_ID}/pipelines?order_by=id&sort=asc&scope=running" | jq '.[0].id=='"${CI_PIPELINE_ID}")
+        if [ "${READY}" = "true" ]; then
+          printf '\nReady!'
+          exit 0
+        else
+          printf '.'
+          sleep 10
+        fi
+      done

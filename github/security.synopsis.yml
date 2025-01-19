@@ -1,0 +1,74 @@
+# source:
+# - https://github.com/search?o=desc&q=synopsys-sig%2Fintelligent-security-scan+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/marketplace/actions/synopsys-intelligent-security-scan
+# tags: ['github action', 'security scanning', 'security', Synopsys, detect]
+
+name: "Synopsys Intelligent Security Scan"
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  security:
+    name: security scans
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    # If this run was triggered by a pull request event, then checkout
+    # the head of the pull request instead of the merge commit.
+    - run: git checkout HEAD^2
+      if: ${{ github.event_name == 'pull_request' }}
+
+    - name: Synopsys Intelligent Security Scan
+      id: prescription
+      uses: synopsys-sig/intelligent-security-scan@v1
+      with:
+        ioServerHost: "${{ secrets.IO_SERVER_HOST}}"
+        ioServerToken: "${{ secrets.IO_SERVER_TOKEN}}"
+        additionalWorkflowArgs: --persona=developer --release.type=minor --sast.rescan.threshold=5  --sca.rescan.threshold=5
+                  --polaris.url=${{secrets.POLARIS_SERVER_URL}} --polaris.token=${{secrets.POLARIS_ACCESS_TOKEN}}
+                  --sensitive.package.pattern='.*(\\+\\+\\+.*(com\\/example\\/app)).*'
+        stage: "IO"
+
+    # Please note that the ID in previous step was set to prescription
+    # in order for this logic to work also make sure that POLARIS_ACCESS_TOKEN
+    # is defined in settings
+    - name: Static Analysis with Polaris
+      if: ${{steps.prescription.outputs.sastScan == 'true' }}
+      run: |
+          export POLARIS_SERVER_URL=${{ secrets.POLARIS_SERVER_URL}}
+          export POLARIS_ACCESS_TOKEN=${{ secrets.POLARIS_ACCESS_TOKEN}}
+          wget -q ${{ secrets.POLARIS_SERVER_URL}}/api/tools/polaris_cli-linux64.zip
+          unzip -j polaris_cli-linux64.zip -d /tmp
+          /tmp/polaris analyze -w
+
+    # Please note that the ID in previous step was set to prescription
+    # in order for this logic to work
+    - name: Software Composition Analysis with Black Duck
+      if: ${{steps.prescription.outputs.scaScan == 'true' }}
+      uses: blackducksoftware/github-action@v2
+      with:
+        args: '--blackduck.url="${{ secrets.BLACKDUCK_URL}}" --blackduck.api.token="${{ secrets.BLACKDUCK_API_TOKEN}}" --detect.tools="DETECTOR"'
+
+    - name: Synopsys Intelligent Security Scan
+      uses: synopsys-sig/intelligent-security-scan@v1
+      with:
+        ioServerHost: "${{secrets.IO_SERVER_HOST}}"
+        ioServerToken: "${{secrets.IO_SERVER_TOKEN}}"
+        additionalWorkflowArgs: --IS_SAST_ENABLED=${{steps.prescription.outputs.sastScan}} --IS_SCA_ENABLED=${{steps.prescription.outputs.scaScan}}
+                --slack.channel.id={{CHANNEL_ID}} --slack.token=${{secrets.SLACK_TOKEN}}
+                --polaris.project.name={{PROJECT_NAME}} --polaris.url=${{secrets.POLARIS_SERVER_URL}} --polaris.token=${{secrets.POLARIS_ACCESS_TOKEN}}
+                --blackduck.project.name={{PROJECT_NAME}}:{{PROJECT_VERSION}} --blackduck.url=${{secrets.BLACKDUCK_URL}} --blackduck.api.token=${{secrets.BLACKDUCK_TOKEN}}
+        stage: "WORKFLOW"
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v1
+      with:
+        # Path to SARIF file relative to the root of the repository
+        sarif_file: workflowengine-results.sarif.json

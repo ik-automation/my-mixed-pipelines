@@ -1,0 +1,90 @@
+.template-build-and-push:
+  stage: build-and-push
+  image: gitlab-registry.shops.com/docker/ozon/dind:1.0
+  variables:
+    IMAGE_NAME: ""
+    CONTEXT: ""
+    VERSION: ""
+    BUILD_ARGS: ""
+    ROOT_IMAGE: "false"
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  script:
+    - >
+      if [ "${IMAGE_NAME}" == "" ] && [ "${ROOT_IMAGE}" != "true" ]; then
+        echo "Переменная IMAGE_NAME не определена."
+        exit 1
+      fi
+    - >
+      CONTAINER_CURRENT_IMAGE="${CI_REGISTRY}/${CONTAINER_PATH}"
+      FINAL_VERSION="${CI_COMMIT_REF_SLUG}"
+
+      if [ "${VERSION}" != "" ]; then
+        if [ "${CI_COMMIT_REF_SLUG}" == "master" ]; then
+          FINAL_VERSION="${VERSION}"
+        else
+          FINAL_VERSION="${CI_COMMIT_REF_SLUG}-${VERSION}"
+        fi
+      fi
+    - >
+      if [[ "${ROOT_IMAGE}" == "true" ]]; then
+        IMAGE_FULL_DESTINATION="${CONTAINER_CURRENT_IMAGE}:${FINAL_VERSION}"
+      else
+        IMAGE_FULL_DESTINATION="${CONTAINER_CURRENT_IMAGE}/${IMAGE_NAME}:${FINAL_VERSION}"
+      fi
+
+      TAGS="${TAGS} -t ${IMAGE_FULL_DESTINATION}"
+    - BUILD_ARGS="--no-cache --pull ${BUILD_ARGS} ${TAGS} ${CONTEXT}"
+    - echo "${BUILD_ARGS}"
+    - docker build ${BUILD_ARGS}
+    - docker push ${CONTAINER_CURRENT_IMAGE}/${IMAGE_NAME}:${FINAL_VERSION}
+
+.template-kaniko-build:
+  stage: build-and-push
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  variables:
+    IMAGE_NAME: ""
+    CONTEXT: ""
+    VERSION: ""
+    BUILD_ARGS: ""
+    DOCKERFILE_PATH: ""
+    ROOT_IMAGE: "false"
+  before_script:
+    - >
+      if [ "${IMAGE_NAME}" == "" ] && [ "${ROOT_IMAGE}" != "true" ]; then
+        echo "Переменная IMAGE_NAME не определена."
+        exit 1
+      fi
+    - >
+      CONTAINER_CURRENT_IMAGE="${CI_REGISTRY}/${CONTAINER_PATH}"
+      FINAL_VERSION="${CI_COMMIT_REF_SLUG}"
+
+      if [ "${VERSION}" != "" ]; then
+        if [ "${CI_COMMIT_REF_SLUG}" == "master" ]; then
+          FINAL_VERSION="${VERSION}"
+        else
+          FINAL_VERSION="${CI_COMMIT_REF_SLUG}-${VERSION}"
+        fi
+      fi
+    - >
+      if [[ "${ROOT_IMAGE}" == "true" ]]; then
+        IMAGE_FULL_DESTINATION="${CONTAINER_CURRENT_IMAGE}:${FINAL_VERSION}"
+      else
+        IMAGE_FULL_DESTINATION="${CONTAINER_CURRENT_IMAGE}/${IMAGE_NAME}:${FINAL_VERSION}"
+      fi
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+  script:
+    - /kaniko/executor --context $CI_PROJECT_DIR/${CONTEXT} ${BUILD_ARGS} --dockerfile ${DOCKERFILE_PATH} --destination ${IMAGE_FULL_DESTINATION}
+
+# SECURITY SCAN
+
+.template-scan:
+  extends: .trivy_scan
+  before_script:
+    - >
+      if [ "${CI_COMMIT_REF_SLUG}" != "master" ]; then
+        export IMAGE_TAG="${CI_COMMIT_REF_SLUG}-${IMAGE_TAG}"
+      fi
+  allow_failure: false

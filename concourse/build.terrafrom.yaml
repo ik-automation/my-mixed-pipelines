@@ -1,0 +1,372 @@
+# https://github.com/ljfranklin/terraform-resource/blob/master/ci/pipeline.yml
+
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <$ATC_EXTERNAL_URL/teams/main/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+  - &success-alert
+    put: slack-alert
+    params:
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <$ATC_EXTERNAL_URL/teams/main/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+
+jobs:
+  - name: auto-bump-terraform
+    on_success: *success-alert
+    on_failure: *failure-alert
+    plan:
+      - get: terraform-github-release
+        trigger: true
+      - get: resource-src
+      - task: bump-terraform-cli
+        file: resource-src/ci/tasks/bump-terraform-cli.yml
+      - task: git-commit
+        file: resource-src/ci/tasks/git-commit.yml
+        input_mapping: {input-src: updated-resource-src}
+        output_mapping: {output-src: committed-resource-src}
+        params:
+          GIT_ADD_ARGS: ./config/terraform-version
+          GIT_COMMIT_MSG: ":airplane: Auto-commit: Bumping Terraform CLI version"
+          GIT_COMMIT_USERNAME: friendly-ci
+          GIT_COMMIT_EMAIL: {{git_commit_email}}
+          GIT_SUCCEED_ON_NO_CHANGES: true
+      - put: resource-src
+        params:
+          repository: committed-resource-src/
+          rebase: true
+
+  - name: push-dev-image
+    serial_groups: [track1, track2]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+      - task: build-artifacts
+        file: resource-src/ci/tasks/build-dev-artifacts.yml
+      - put: terraform-dev-image
+        params:
+          build: build-artifacts/
+
+  - name: test-unit
+    serial_groups: [track1, track2]
+    on_failure: *failure-alert
+    plan:
+      - aggregate:
+        - get: resource-src
+          trigger: true
+          passed: [push-dev-image]
+        - get: terraform-dev-image
+          passed: [push-dev-image]
+      - task: test-unit
+        image: terraform-dev-image
+        file: resource-src/ci/tasks/test-unit.yml
+        params:
+          AWS_ACCESS_KEY:           {{ec2_access_key}}
+          AWS_SECRET_KEY:           {{ec2_secret_key}}
+          AWS_BUCKET:               {{storage_bucket}}
+          AWS_BUCKET_SUBFOLDER:     terraform-test-unit
+          S3_COMPATIBLE_BUCKET:     {{s3_compatible_bucket}}
+          S3_COMPATIBLE_ENDPOINT:   {{s3_compatible_endpoint}}
+          S3_COMPATIBLE_ACCESS_KEY: {{s3_compatible_access_key}}
+          S3_COMPATIBLE_SECRET_KEY: {{s3_compatible_secret_key}}
+          S3_KMS_KEY_ID:            {{s3_kms_key_id}}
+          GITHUB_PRIVATE_KEY:       {{git_private_key}}
+
+  - name: push-test-image
+    serial_groups: [track1, track2]
+    on_failure: *failure-alert
+    plan:
+      - aggregate:
+        - get: resource-src
+          trigger: true
+          passed: [test-unit]
+        - get: terraform-dev-image
+          passed: [test-unit]
+      - task: build-artifacts
+        image: terraform-dev-image
+        file: resource-src/ci/tasks/build-prod-artifacts.yml
+      - put: terraform-test-image
+        params:
+          build: build-artifacts/
+          cache: true
+      - task: wait-for-resource-type-to-update
+        image: terraform-dev-image
+        config:
+          platform: linux
+          run:
+            path: sleep
+            args:
+              - 120 # concourse updates resource images every minute
+
+  - name: plan-infrastructure
+    serial_groups: [track1]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [push-test-image]
+      - put: terraform
+        params:
+          env_name: terraform-ci
+          plan_only: true
+          vars:
+            object_key: ci-pipeline/track1
+            object_content: "terraform is neat!"
+
+  - name: create-infrastructure
+    serial_groups: [track1]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [plan-infrastructure]
+      - put: terraform
+        params:
+          env_name: terraform-ci
+          plan_run: true
+      - &show-outputs
+        task: show-outputs
+        config:
+          platform: linux
+          image_resource: &test-image
+            type: docker-image
+            source:
+              repository: ljfranklin/terraform-resource
+              tag: test
+          inputs:
+            - name: terraform
+          run:
+            path: /bin/sh
+            args:
+              - -c
+              - |
+                  echo "name: $(cat terraform/name)"
+                  echo "metadata: $(cat terraform/metadata)"
+
+  - name: update-infrastructure-via-params
+    serial_groups: [track1]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [create-infrastructure]
+      - put: terraform
+        params:
+          env_name: terraform-ci
+          vars:
+            # update the file contents
+            object_content: "terraform is still neat!"
+      - *show-outputs
+
+  - name: update-infrastructure-via-file
+    serial_groups: [track1]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [update-infrastructure-via-params]
+      - task: make-var-file
+        config:
+          platform: linux
+          image_resource: *test-image
+          outputs:
+             - name: vars
+          run:
+            path: /bin/sh
+            args:
+              - -c
+              - |
+                  echo 'object_content: "terraform files are neat too!"' >> vars/input.yml
+      - put: terraform
+        params:
+          env_name: terraform-ci
+          var_files:
+          - vars/input.yml
+      - *show-outputs
+
+  - name: destroy-infrastructure
+    serial_groups: [track1]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [update-infrastructure-via-file]
+      - put: terraform
+        params:
+          env_name: terraform-ci
+          action: destroy
+        get_params:
+          action: destroy
+
+  - name: create-env-and-lock
+    serial_groups: [track2]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [push-test-image]
+      - put: terraform
+        params:
+          # generate a random env_name for the lock file
+          generate_random_name: true
+          delete_on_failure: true
+          vars:
+            object_key: ci-pipeline/track2
+            object_content: "terraform is neat!"
+      # create a new lock containing the terraform output
+      - put: locks
+        params:
+          add: terraform/
+
+  - name: lock-env
+    serial_groups: [track2]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [create-env-and-lock]
+      - put: locks
+        params:
+          acquire: true
+      - task: show-lock
+        config:
+          platform: linux
+          image_resource: *test-image
+          inputs:
+            - name: locks
+          run:
+            path: /bin/sh
+            args:
+              - -c
+              - |
+                  echo "name: $(cat locks/name)"
+                  echo "metadata: $(cat locks/metadata)"
+
+  - name: destroy-env-and-lock
+    serial_groups: [track2]
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        trigger: true
+        passed: [lock-env]
+      - get: locks
+        passed: [lock-env]
+      # destroy the IaaS resources
+      - put: terraform
+        params:
+          env_name_file: locks/name
+          action: destroy
+        get_params:
+          action: destroy
+      # destroy the lock
+      - put: locks
+        params:
+          remove: locks/
+
+  - name: push-prod-image
+    on_failure: *failure-alert
+    plan:
+      - get: resource-src
+        passed: [destroy-env-and-lock, destroy-infrastructure]
+        trigger: true
+      - aggregate:
+        - put: terraform-pinned-image
+          params:
+            pull_repository: ljfranklin/terraform-resource
+            pull_tag: test
+            cache: true
+            tag: resource-src/config/terraform-version
+        - put: terraform-prod-image
+          params:
+            pull_repository: ljfranklin/terraform-resource
+            pull_tag: test
+            cache: true
+
+resource_types:
+- name: terraform
+  type: docker-image
+  source:
+    # use tag `latest` for stable release
+    repository: ljfranklin/terraform-resource
+    tag: test
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+- name: resource-src
+  type: git
+  source:
+    uri: git@github.com:ljfranklin/terraform-resource.git
+    branch: master
+    private_key: {{git_private_key}}
+- name: terraform-github-release
+  type: github-release
+  source:
+    user: hashicorp
+    repository: terraform
+    access_token: {{github_access_token}}
+- name: terraform-dev-image
+  type: docker-image
+  source:
+    repository: ljfranklin/terraform-resource
+    tag: dev
+    email: {{docker_email}}
+    username: {{docker_username}}
+    password: {{docker_password}}
+- name: terraform-test-image
+  type: docker-image
+  source:
+    repository: ljfranklin/terraform-resource
+    tag: test
+    email: {{docker_email}}
+    username: {{docker_username}}
+    password: {{docker_password}}
+- name: terraform-pinned-image
+  type: docker-image
+  source:
+    repository: ljfranklin/terraform-resource
+    email: {{docker_email}}
+    username: {{docker_username}}
+    password: {{docker_password}}
+- name: terraform-prod-image
+  type: docker-image
+  source:
+    repository: ljfranklin/terraform-resource
+    tag: latest
+    email: {{docker_email}}
+    username: {{docker_username}}
+    password: {{docker_password}}
+- name: locks
+  type: pool
+  source:
+    uri: git@github.com:ljfranklin/terraform-resource.git
+    branch: ci-pool-test
+    pool: aws-ci-pool
+    private_key: {{git_private_key}}
+- name: terraform
+  type: terraform
+  source: &terraform-source
+    # options common to all jobs can be specified under source
+    storage:
+      access_key_id:     {{storage_access_key}}
+      secret_access_key: {{storage_secret_key}}
+      bucket:            {{storage_bucket}}
+      bucket_path:       ci-pipeline
+    terraform_source: resource-src/fixtures/module
+    vars:
+      access_key:  {{ec2_access_key}}
+      secret_key:  {{ec2_secret_key}}
+      bucket:      {{storage_bucket}}
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: {{slack_url}}

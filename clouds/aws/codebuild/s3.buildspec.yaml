@@ -1,0 +1,30 @@
+---
+source: https://tigerspike.com/10-smart-ways-to-use-aws-codebuild/
+tags: ['s3', 'codebuild', 'push-to-bucket', 'env']
+---
+
+version: 0.2
+
+env:
+  variables:
+    S3_BUCKET: my-packages-bucket
+
+phases:
+  install:
+    runtime-version:
+      dotnet: 3.1
+  build:
+    commands:
+      - echo "CD into source folder, because my source code is tidy"
+      - cd src
+      - echo "Restore, Build, then Publish.."
+      - dotnet restore
+      - dotnet build --no-restore
+      - dotnet publish --no-restore -output outputDirectory
+  post_build:
+    commands:
+      - echo "Compressing the package."
+      - cd ../outputDirectory
+      - zip -r myBuild.zip
+      - echo "Uploading to S3.."
+      - aws s3 cp myBuild.zip s3://${S3_BUCKET}/mybuild.zip

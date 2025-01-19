@@ -1,0 +1,42 @@
+# source:
+# - https://github.com/search?o=desc&q=cycjimmy%2Fsemantic-release-action+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/maksimru/event-scheduler/blob/master/.github/workflows/release.yaml
+# - https://github.com/cycjimmy/semantic-release-action
+# tags: ['github action', 'release', 'semantic', 'last release', 'semver', changelog]
+
+name: Release
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Action For Semantic Release
+        uses: cycjimmy/semantic-release-action@v2.3.0
+        id: semantic
+        with:
+          semantic_version: 17
+          extra_plugins: |
+            conventional-changelog-conventionalcommits
+            @semantic-release/changelog
+            @semantic-release/git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push updates to branch for major version
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: "git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git HEAD:refs/heads/v${{steps.semantic.outputs.new_release_major_version}}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

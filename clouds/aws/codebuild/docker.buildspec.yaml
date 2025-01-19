@@ -1,0 +1,26 @@
+---
+source: https://tigerspike.com/10-smart-ways-to-use-aws-codebuild/
+tags: ['docker', 'codebuild', 'push-to-bucket', 'env', 'ecr']
+---
+
+version: 0.2
+
+env:
+  variables:
+    ECR_REPO: 1234.dkr.ecr.us-east-1.amazonaws.com/myapi
+
+phases:
+  install:
+    runtime-version:
+      docker: 18
+  build:
+    commands:
+      - echo "Buildilng a Docker image"
+      - docker build -t myImage . --file Dockerfile
+      - echo "Tagging Docker image for ECR.."
+      - docker tag myImage ${ECR_REPO}:${CoDEBUILD_SOURCE_VERSION}
+      - echo 'Logging to ECR..'
+      - $(aws ecr get-login --no-include-email)
+      - echo "Pushing Docker image to ECR.."
+      - docker push ${ECR_REPO}:${CoDEBUILD_SOURCE_VERSION}
+      - echo "Done."

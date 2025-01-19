@@ -1,0 +1,121 @@
+// https://github.com/renovatebot/renovate
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>renovatebot/.github"
+  ],
+  "assignees": [
+    "rarkins",
+    "viceice"
+  ],
+  "semanticCommitScope": "deps",
+  "automergeType": "pr",
+  "prCreation": "immediate",
+  "ignorePresets": [
+    ":ignoreModulesAndTests"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/__fixtures__/**",
+    "test/**"
+  ],
+  "rebaseWhen": "conflicted",
+  "dockerfile": {
+    "semanticCommitType": "build"
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "containerbase/node"
+      ],
+      "versioning": "node"
+    },
+    {
+      "matchDepTypes": [
+        "dependencies",
+        "optionalDependencies"
+      ],
+      "semanticCommitType": "build"
+    },
+    {
+      "matchPackageNames": [
+        "semantic-release"
+      ],
+      "semanticCommitType": "build"
+    },
+    {
+      "matchPackageNames": [
+        "@types/jest"
+      ],
+      "groupName": "jest monorepo"
+    },
+    {
+      "matchFileNames": [
+        "**/__fixtures__/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "set fix scope for base image",
+      "matchDepNames": [
+        "ghcr.io/renovatebot/base-image"
+      ],
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "set feat scope for base image major",
+      "matchDepNames": [
+        "ghcr.io/renovatebot/base-image"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "semanticCommitType": "feat"
+    },
+    {
+      "description": "set build scope for node updates",
+      "matchPackageNames": [
+        "node"
+      ],
+      "matchFileNames": [
+        ".nvmrc",
+        "tools/docker/Dockerfile"
+      ],
+      "semanticCommitType": "build"
+    },
+    {
+      "description": "set branch prefix for node major updates to split from minor updates",
+      "matchPackageNames": [
+        "node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "additionalBranchPrefix": "major"
+    },
+    {
+      "description": "disable some invalid deps from docs",
+      "matchPackageNames": [
+        "my.old.registry/**",
+        "my.new.registry/**"
+      ],
+      "matchFileNames": [
+        "docs/**/*.md"
+      ],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "config/options/index.ts"
+      ],
+      "matchStrings": [
+        "default: '(?<depName>ghcr.io/containerbase/sidecar):(?<currentValue>.*)'"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

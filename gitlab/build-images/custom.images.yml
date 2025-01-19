@@ -1,0 +1,77 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/.gitlab/ci/custom.images.yml
+danger:
+  extends: .build_static_image
+
+gitlab-charts-build-base-helm-3.7:
+  extends: .build_static_image
+
+gitlab-helm3.5-kubectl1.17:
+  extends: .build_static_image
+
+gitlab-vscode-nodeless:
+  extends: .build_static_image
+
+kaniko:
+  extends: .build_static_image
+
+release-tools:
+  extends: .build_static_image
+
+triage-ops-ruby-2.7:
+  extends: .build_static_image
+
+sitespeed-gitlab:
+  extends: .build_static_image
+
+ubi-release:
+  extends: .build_static_image
+
+www-gitlab-com-debian-bullseye-ruby-3.0-node-16:
+  extends: .build_static_image
+
+www-gitlab-com-debian-bullseye-ruby-3.2-node-18:
+  extends: .build_static_image
+
+build-git:
+  extends: .build_static_image
+
+# Used by GitLab: https://gitlab.com/gitlab-org/gitlab/-/blob/13-8-stable-ee/lib/gitlab/ci/templates/Terraform.gitlab-ci.yml
+terraform:
+  extends: .build_static_image
+
+# Used by go projects for linting https://gitlab.com/gitlab-org/gitlab/blob/master/doc/development/go_guide/index.md#automatic-linting
+golangci-lint-1.50-alpine:
+  extends: .build_static_image
+
+golangci-lint-1.51-alpine:
+  extends: .build_static_image
+
+golangci-lint-1.52-alpine:
+  extends: .build_static_image
+
+# Used by gitlab-operator: https://gitlab.com/gitlab-org/cloud-native/gitlab-operator
+gitlab-operator-build-base-golang-1.18:
+  extends: .build_static_image
+
+alpine-bash-jq-curl-git:
+  extends: .build_static_image
+
+# Used by frontend related tasks for linting GraphQL
+apollo:
+  extends: .build_static_image
+
+zoekt-ci-image-1.0:
+  extends: .build_static_image
+
+postgres-12-pgvector-0.4.1:
+  extends: .build_static_image
+
+postgres-13-pgvector-0.4.1:
+  extends: .build_static_image
+
+postgres-14-pgvector-0.4.1:
+  extends: .build_static_image
+
+postgres-15-pgvector-0.4.1:
+  extends: .build_static_image
+

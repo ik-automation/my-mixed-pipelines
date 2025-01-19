@@ -1,0 +1,21 @@
+---
+source:
+- https://github.com/marketplace/actions/additional-tags
+- https://github.com/DeFiCh/oss-governance-bot/blob/main/.github/workflows/release.yml
+tags: ['github action', 'commit files', 'git-commit']
+---
+
+
+name: Release Tags
+
+on:
+  release:
+    types: [ released ]
+
+jobs:
+  release-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+
+      - uses: vweevers/additional-tags-action@v1

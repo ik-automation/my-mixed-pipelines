@@ -1,0 +1,66 @@
+---
+source: https://github.com/accelerator-blueprints/base-blueprint/blob/main/.github/workflows/changelog.yml
+tags: ['github action', 'changelog', 'pull request']
+---
+
+---
+name: changelog
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'manual trigger'
+  release:
+    types: [published]
+
+env:
+  isForkedRepository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+  BRANCH: main
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    name: Generate changelog for main branch
+    if: "!contains(github.event.head_commit.message, 'skip')"
+    steps:
+    # To use this repository's private action, you must check out the repository
+    - name: Checkout
+      uses: actions/checkout@v2.3.4
+      with:
+        fetch-depth: 30
+        submodules: 'true'
+
+    # https://github.com/marketplace/actions/tag-changelog
+    - name: Create changelog text
+      uses: loopwerk/conventional-changelog-action@latest
+      id: changelog
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        config_file: .github/tag-changelog-config.js
+
+    - name: Read CHANGELOG.md
+      id: readfile
+      uses: juliangruber/read-file-action@v1
+      with:
+        path: CHANGELOG.md
+
+    - name: Write to CHANGELOG.md
+      uses: DamianReeves/write-file-action@master
+      with:
+        path: CHANGELOG.md
+        contents: ${{ steps.changelog.outputs.changelog }}${{ steps.readfile.outputs.content }}
+        write-mode: overwrite
+
+    -
+      name: Create Pull Request
+      uses: peter-evans/create-pull-request@v3
+      if: success()
+      with:
+        commit-message: "chore: Update CHANGELOG.md [skip ci]"
+        title: Update Changelog
+        body: "chore: Update CHANGELOG.md [skip ci]"
+        branch: update-changelog
+        base: ${{ github.head_ref }}
+        committer: GitHub <noreply@github.com>
+        author: actions-bot <actions-bot@users.noreply.github.com>

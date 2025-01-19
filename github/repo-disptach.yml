@@ -1,0 +1,22 @@
+---
+source: https://github.com/marketplace/actions/repository-dispatch
+tags: ['github action', 'configuration', 'multi repo']
+---
+
+jobs:
+  build:
+    # Main workflow job that builds, tests, etc.
+
+  dispatch:
+    needs: build
+    strategy:
+      matrix:
+        repo: ['my-org/repo1', 'my-org/repo2', 'my-org/repo3']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          repository: ${{ matrix.repo }}
+          event-type: my-event

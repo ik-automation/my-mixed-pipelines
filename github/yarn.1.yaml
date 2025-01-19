@@ -1,0 +1,37 @@
+# https://github.com/SamChou19815/website/blob/master/.github/workflows/generated-cd-blog.yml
+# @generated
+
+name: CD blog
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - packages/lib-react/**
+      - packages/blog/**
+      - package.json
+      - yarn.lock
+      - configuration/**
+      - .github/workflows/generated-*-blog.yml
+env:
+  FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Node
+        uses: actions/setup-node@v1
+      - name: Use Yarn Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/yarn
+          key: yarn-${{ hashFiles(format('{0}{1}', github.workspace, '/yarn.lock')) }}
+          restore-keys: yarn-
+      - name: Yarn Install
+        run: yarn install
+      - name: Build
+        run: yarn workspace blog build
+      - name: Deploy
+        run: yarn workspace blog deploy

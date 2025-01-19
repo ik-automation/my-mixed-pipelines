@@ -1,0 +1,107 @@
+.switch:
+  extends: .ci_function
+  stage: post-deploy
+  when: manual
+  # variables:
+  #   GIT_DEPTH: "0"
+  script:
+    - k8s_default_svc "$SERVICE_NAME"
+    - k8s_default_ver "$SERVICE_NAME"
+  except:
+    refs:
+      - tags
+  # environment:
+  #   name: default-staging
+    # on_stop: def route stg clean
+
+.development switch:
+  extends: .switch
+  tags:
+    - development
+    - switch
+  except:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+      - tags
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "development"
+  environment:
+    name: default-dev
+    url:  http://$SERVICE_NAME.dev.a.o3.ru
+  when: manual
+  resource_group: development
+
+.staging switch:
+  extends: .switch
+  tags:
+    - staging
+    - switch
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  environment:
+    name: default-staging
+    url:  http://$SERVICE_NAME.stg.a.o3.ru
+  when: manual
+  resource_group: staging
+
+.staging latest switch:
+  extends: .switch
+  tags:
+    - staging
+    - switch
+  only:
+    refs:
+      - master
+  allow_failure: true
+  script:
+    - k8s_default_svc "$SERVICE_NAME"  | sed 's/master/latest/g'
+    - k8s_default_ver "$SERVICE_NAME" | sed 's/master/latest/g'
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  environment:
+    name: default-staging
+    url:  http://$SERVICE_NAME.stg.a.o3.ru
+  resource_group: staging
+
+.switch lock:
+  extends: .ci_function
+  tags:
+    - staging
+    - switch
+  stage: post-deploy
+  when: manual
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - run_ci
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+    variables:
+      - $DEFAULT_ROUTE_LOCK == "yes"
+
+.switch unlock:
+  extends: switch lock
+  script:
+    - run_ci

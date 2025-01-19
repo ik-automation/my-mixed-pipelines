@@ -1,0 +1,27 @@
+include:
+  - local: ".common.gitlab-ci.yml"
+
+.development:
+  only: [refs, branches]
+.dev clean single:
+  only: [refs, branches]
+  needs: [development]
+.staging:
+  only: [refs, branches]
+  when: manual
+.staging clean single:
+  only: [refs, branches]
+  needs: [staging]
+.production:
+  only: [refs, branches]
+  variables:
+    IMAGE_RELEASE: "false"
+.production clean:
+  only: [refs, branches]
+  needs: [production]
+.helm check:
+  stage: publish
+.create release:
+  only: [external]
+.ready to prod:
+  only: [external]

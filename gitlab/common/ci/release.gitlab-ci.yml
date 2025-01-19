@@ -1,0 +1,38 @@
+# This requires two variables:
+# - GITLAB_API_TOKEN: A valid GitLab API token with the `api` scope.
+# - VERSION: version number set as a variable or evaluated with custom command in before script
+.release-notes-base:
+  image: ruby:2.7
+  script:
+    - '[ -n "${VERSION}" ] || (echo "Release job requires VERSION environment variable to be set!" && exit 1)'
+    - apt-get update && apt-get -y install jq
+    - |
+      raw_release_notes=$(curl --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/changelog?version=${VERSION}" | jq ".notes")
+      release_notes="${raw_release_notes%\"}" # Remove traling quote
+      release_notes="${release_notes#\"}" # Remove leading quote
+- echo $release_notes
+    - echo "RELEASE_VERSION=${VERSION}" >> variables.env
+    - echo "RELEASE_TAG=${VERSION}" >> variables.env
+    - echo "RELEASE_NOTES=${release_notes}" >> variables.env
+    - cat variables.env
+  artifacts:
+    reports:
+      dotenv: variables.env
+    paths:
+      - variables.env
+
+.release-creation-base:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  variables:
+    CHANGELOG_FILE: "./changelog.md"
+  script:
+    - echo "${RELEASE_NOTES}" | sed 's/\\n/\n/g' > "${CHANGELOG_FILE}"  # Transform "\n" to actual new lines
+    - echo "Creating the release for the ${RELEASE_TAG} tag with the release notes from ${CHANGELOG_FILE}:"
+    - cat "${CHANGELOG_FILE}"
+  release:
+    name: "${RELEASE_TAG}"
+    description: "${CHANGELOG_FILE}"
+    tag_name: "${RELEASE_TAG}"
+  artifacts:
+    paths:
+      - "${CHANGELOG_FILE}"

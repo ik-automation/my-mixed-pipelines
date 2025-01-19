@@ -1,0 +1,44 @@
+.ci-job:
+  tags: [ci-jobs]
+
+.ci_function:
+  interruptible: false
+  image: ${CI_REGISTRY}/docker/ci:2.0.0
+  dependencies: []
+  before_script:
+    - export PIPE_VERSION="0.0.4-infra"
+    - export CI_VERSION="${CI_VERSION:-1.3.1}"
+    - echo "$CI_VERSION"
+    - eval "$(curl -m 60 -s https://gitlab.shops.com/deploy/ci/-/raw/$CI_VERSION/functions.sh)"
+
+.create image:
+  extends:
+    - .ci_function
+    - .ci-job
+  interruptible: true
+  stage: publish
+  tags:
+    - registry
+  except:
+    - tags
+  script:
+    - docker_image_create "" "$IMAGE_TAG"
+
+.infra:
+  extends: .ci_function
+  tags: [infra]
+  variables:
+    HELM_VALUES: "-f ./$HELM_VALUES_FOLDER/values.yaml -f ./$HELM_VALUES_FOLDER/values_infra.yaml"
+  stage: deploy
+  script:
+    - k8s_deploy "$SERVICE_NAME"
+  # only:
+  #  - master
+  #  - /^(release|hotfix)\/.+$/
+  except:
+    - tags
+  environment:
+    name: infra
+  allow_failure: false
+  when: manual
+  resource_group: infrastructure

@@ -1,0 +1,51 @@
+# source:
+# - https://github.com/search?o=desc&q=tjenkinson%2Fgh-action-auto-merge-dependency-updates+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/tjenkinson/gh-action-auto-merge-dependency-updates
+# - https://github.com/github/docs/blob/main/.github/workflows/automerge-dependencies.yml
+# tags: ['github action', 'automerge']
+
+name: Auto Merge Dependency Updates
+
+# **What it does**: Automatically merge pull requests from dependabot.
+# **Why we have it**: To keep our dependencies up-to-date, to avoid security issues.
+# **Who does it impact**: It helps docs engineering focus on higher value work.
+
+on:
+  pull_request:
+    paths:
+      - 'package*.json'
+      - 'Gemfile*'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  pull_request_review:
+    types:
+      - edited
+      - submitted
+
+jobs:
+  run:
+    if: github.repository == 'github/docs-internal' || github.repository == 'github/docs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tjenkinson/gh-action-auto-merge-dependency-updates@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          allowed-actors: dependabot[bot]
+
+---
+name: Auto Merge Dependency Updates
+
+on:
+  - pull_request
+  - pull_request_review
+  - pull_request_target
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge dependency updates
+        uses: tjenkinson/gh-action-auto-merge-dependency-updates@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          allowed-actors: dependabot-preview[bot], dependabot[bot], renovate[bot], renovate-bot

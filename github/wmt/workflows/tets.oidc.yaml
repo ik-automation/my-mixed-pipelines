@@ -1,0 +1,49 @@
+name: test.oidc
+
+on:
+  workflow_dispatch:
+    inputs:
+      eks:
+        description: "Where or not test eks access"
+        required: true
+        default: false
+        type: boolean
+
+env:
+  AWS_DEFAULT_REGION: us-west-2
+
+jobs:
+  caller-identity:
+    name: check caller identity
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-region: ${{ env.AWS_DEFAULT_REGION }}
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+    - run: aws sts get-caller-identity
+
+    - run: aws s3 ls
+
+    - name: k8s-test
+      if: ${{ github.event.inputs.eks == 'true' }}
+      id: eks
+      run: |
+        ./scripts/k8s-access.sh test
+
+        echo "****TEST****"
+      env:
+        ENVIRONMENT: stage
+        REGION: ${{ env.AWS_DEFAULT_REGION }}
+        CLUSTER_NAME: singleton-stage-cluster
+        NAMESPACE: app

@@ -1,0 +1,173 @@
+name: dbmigration
+# https://github.com/machulav/ec2-github-runner#real-user-examples
+# description: "'dbmigration' services to deploy"
+# runner logs https://github.com/ik-automation/my-mixed-pipelines/blob/101158aed76f2c75528c0b984916eda54b1603c6/github/script.3.yml#L308
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+      branch:
+        description: "Choose the branch from which to build"
+        required: false
+        default: develop
+      apply:
+        description: "Tick the box if planning to apply changes. Default behaviour DRY-RUN"
+        required: true
+        default: false
+        type: boolean
+
+env:
+  SOURCE_REPO: company/video-platform
+  SOURCE_REPO_PATH: source
+  # defaults
+  ARTIFACT_RETENTION_DAYS: 1
+  PROJECT: singleton
+  # should be in inputs
+  # TODO: understand what to do with them
+  STACK_PREFIX: "dbmigration"
+  SERVICE_NAME: "dbmigration"
+  AWS_DEFAULT_REGION: us-west-2
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env }}
+          debug: false
+
+  start-runner:
+    name: start-self-hosted-runner
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+      flyway-url: ${{ steps.params.outputs.flyway_url }}
+      db-username: ${{ steps.params.outputs.db_master_username }}
+      db-password: ${{ steps.params.outputs.db_master_password }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: read-values
+        id: params
+        run: |
+          aws ssm get-parameter --name "/singleton/${ENV}/tools" \
+            --with-decryption  --query 'Parameter.Value' --output text > values.yaml
+          echo "::set-output name=FLYWAY_URL::$(yq '.FLYWAY_URL' < values.yaml)"
+          echo "::set-output name=DB_MASTER_USERNAME::$(yq '.DB_MASTER_USERNAME' < values.yaml)"
+          echo "::set-output name=DB_MASTER_PASSWORD::$(yq '.DB_MASTER_PASSWORD' < values.yaml)"
+          echo "::set-output name=SUBNET_ID::$(yq '.SUBNET_ID' < values.yaml)"
+          echo "::set-output name=SG_ID::$(yq '.SG_ID' < values.yaml)"
+        env:
+          ENV: ${{ github.event.inputs.env }}
+
+      - name: start ec2 runner
+        id: start-ec2-runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: start
+          github-token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ec2-image-id: ami-08323889ad4106df8
+          ec2-instance-type: t3a.small
+          subnet-id: ${{ steps.params.outputs.subnet_id }}
+          security-group-id: ${{ steps.params.outputs.sg_id }}
+          aws-resource-tags: > # optional, requires additional permissions
+            [
+              {"Key": "Name", "Value": "ec2-github-runner"},
+              {"Key": "GitHubRepository", "Value": "${{ github.repository }}"},
+              {"Key": "Owner", "Value": "${{ github.actor }}"}
+            ]
+
+  database-migration:
+    needs: start-runner # required to start the main job when the runner is ready
+    runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Add mask
+        run: |
+          echo "::add-mask::${{ needs.start-runner.outputs.flyway-url }}"
+          echo "::add-mask::${{ needs.start-runner.outputs.db-password }}"
+
+      - name: checkout-source-repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: "5"
+          path: ${{ env.SOURCE_REPO_PATH }}
+
+      - name: validate-git-checkout
+        run: |
+          ls -la
+          ls -la source
+
+      - name: run-db-migration
+        run: |
+          ./scripts/db-migrate.sh
+        env:
+          APPLY: ${{ github.event.inputs.apply }}
+          FLYWAY_URL: ${{ needs.start-runner.outputs.flyway-url }}
+          DB_USERNAME: ${{ needs.start-runner.outputs.db-username }}
+          DB_PASSWORD: ${{ needs.start-runner.outputs.db-password }}
+          FLYWAY_WORKING_DIRECTORY: source/dbmigrations
+
+      - name: rollback-schema-on-db-migration
+        if: ${{ failure() }}
+        run: |
+          ./scripts/db-fix-schema.sh
+        env:
+          APPLY: ${{ github.event.inputs.apply }}
+          FLYWAY_URL: ${{ needs.start-runner.outputs.flyway-url }}
+          DB_USERNAME: ${{ needs.start-runner.outputs.db-username }}
+          DB_PASSWORD: ${{ needs.start-runner.outputs.db-password }}
+          FLYWAY_WORKING_DIRECTORY: source/dbmigrations
+
+  stop-runner:
+    name: Stop self-hosted EC2 runner
+    needs:
+      - start-runner # required to get output from the start-runner job
+      - database-migration # required to wait when the main job is done
+    runs-on: ubuntu-latest
+    if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
+    steps:
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: stop ec2 runner
+        uses: machulav/ec2-github-runner@v2
+        with:
+          mode: stop
+          github-token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          label: ${{ needs.start-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-runner.outputs.ec2-instance-id }}

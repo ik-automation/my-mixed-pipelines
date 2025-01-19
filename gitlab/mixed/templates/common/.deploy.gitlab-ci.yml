@@ -1,0 +1,291 @@
+.staging_deploy:
+  extends:
+    - .k8s_deploy
+    - .register_service
+  tags:
+    - staging
+    - deploy
+  script:
+    - check_resources
+    - deploy_config
+    - k8s_deploy "${SERVICE_NAME}-${CI_COMMIT_REF_SLUG}"
+    - clean_config
+    - k8s_default_svc_check "$SERVICE_NAME"
+  environment:
+    name: staging/$CI_COMMIT_REF_SLUG
+    on_stop: staging clean
+    url:  http://$SERVICE_NAME-$CI_COMMIT_REF_SLUG.stg.a.o3.ru
+  when: on_success
+
+.staging:
+  extends: .staging_deploy
+  only:
+    - /^(release|hotfix)\/.+$/
+    - stable
+    - trunk
+    - release
+  except:
+    refs:
+      - tags
+  resource_group: staging/$CI_COMMIT_REF_SLUG
+
+.dev_deploy:
+  extends: .k8s_deploy
+  tags:
+    - development
+    - deploy
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+      - merge_requests
+    variables:
+      - $CANARY_ISTIO == "yes"
+  when: manual
+
+.development:
+  extends: .dev_deploy
+  environment:
+    name: development/$CI_COMMIT_REF_SLUG
+    on_stop: clean development
+    url:  http://$SERVICE_NAME-$CI_COMMIT_REF_SLUG.dev.a.o3.ru
+  allow_failure: true
+  resource_group: development/$CI_COMMIT_REF_SLUG
+
+.infra:
+  stage: build
+  extends: .ci_function
+  allow_failure: true
+  script:
+    - run_ci
+
+.infra-dev:deploy:
+  extends: .infra
+  tags:
+    - development
+    - deploy
+  rules:
+    - if: '$INFRA_DEPLOY == "yes" && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/'
+      when: manual
+    - when: never
+  environment:
+    name: development-infra/$CI_COMMIT_REF_SLUG
+    on_stop: infra-dev:delete
+  resource_group: development-infra/$CI_COMMIT_REF_SLUG
+
+.infra-dev:delete:
+  stage: close
+  extends: .infra
+  script:
+    - run_ci
+  tags:
+    - development
+    - deploy
+  variables:
+    GIT_STRATEGY: none
+  only:
+    variables:
+      - $INFRA_DEPLOY == "yes"
+  except:
+    - tags
+    - /^(release|hotfix)\/.+$/
+    - stable
+    # - master
+    - trunk
+    - release
+  when: manual
+  environment:
+    name: development-infra/$CI_COMMIT_REF_SLUG
+    action: stop
+
+.infra-stg:deploy:
+  extends: .infra
+  tags:
+    - staging
+    - deploy
+  rules:
+    - if: '$INFRA_DEPLOY_STG == "yes" && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk|master)$/'
+      when: manual
+    - when: never
+  environment:
+    name: staging-infra/$CI_COMMIT_REF_SLUG
+    on_stop: infra-stg:delete
+  resource_group: staging-infra/$CI_COMMIT_REF_SLUG
+
+.infra-stg:delete:
+  stage: close
+  extends: .infra
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - run_ci
+  tags:
+    - staging
+    - deploy
+  only:
+    variables:
+      - $INFRA_DEPLOY_STG == "yes"
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - master
+      - stable
+      - trunk
+      - release
+  except:
+    - tags
+  when: manual
+  environment:
+    name: staging-infra/$CI_COMMIT_REF_SLUG
+    action: stop
+
+.staging latest:
+  extends:
+    - .staging_deploy
+    - .register_service
+  script:
+    - deploy_config
+    - docker_check_image_latest
+    - k8s_deploy "${SERVICE_NAME}-latest" "$IMAGE_TAG"
+    - clean_config
+    - k8s_default_svc "$SERVICE_NAME"
+    - k8s_default_ver "$SERVICE_NAME"
+  only:
+    - master
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  environment:
+    name: staging/latest
+    on_stop: staging clean latest
+    url:  http://$SERVICE_NAME-latest.stg.a.o3.ru
+  allow_failure: true
+  resource_group: staging
+
+.production:
+  extends:
+    - .k8s_deploy
+    - .register_service
+  variables:
+    IMAGE_RELEASE: "true"
+  tags:
+    - production
+    - deploy
+  script:
+    - check_resources
+    - deploy_config
+    - k8s_deploy "$SERVICE_NAME"
+  environment:
+    name: production
+    on_stop: production clean
+    url:  http://$SERVICE_NAME.prod.a.o3.ru
+  only:
+    - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $BLUE_GREEN == "yes"
+      - $CANARY == "yes"
+      - $DEPLOY_TAG
+  when: manual
+  resource_group: production
+
+.staging job:
+  extends: .staging_deploy
+  allow_failure: true
+  variables:
+    JOBS_DEPLOY: "true"
+  environment:
+    name: staging/${CI_COMMIT_REF_SLUG}-job
+    on_stop: staging clean job
+  script:
+    - helm_delete_cron
+    - k8s_deploy_job "$SERVICE_NAME"
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $JOBS == "yes"
+  except:
+    - tags
+  resource_group: staging-job/$CI_COMMIT_REF_SLUG
+
+.development job:
+  extends: .dev_deploy
+  allow_failure: true
+  variables:
+    JOBS_DEPLOY: "true"
+  script:
+    - helm_delete_cron
+    - k8s_deploy_job "$SERVICE_NAME"
+  environment:
+    name: development/${CI_COMMIT_REF_SLUG}-job
+    on_stop: dev clean job
+  only:
+    variables:
+      - $JOBS == "yes"
+  resource_group: development-job/$CI_COMMIT_REF_SLUG
+
+.production job:
+  extends: .k8s_deploy
+  allow_failure: true
+  variables:
+    IMAGE_RELEASE: "false"
+    JOBS_DEPLOY: "true"
+  tags:
+    - production
+    - deploy
+  script:
+    - helm_delete_cron
+    - k8s_deploy_job "$SERVICE_NAME"
+  environment:
+    name: production-job
+    on_stop: production clean job
+  only:
+    refs:
+      - tags
+    variables:
+      - $JOBS == "yes"
+  except:
+    - /^.*\/.*$/
+  when: manual
+  resource_group: production-job
+
+.tmp deploy:
+  extends: .k8s_deploy
+  stage: pre-deploy
+  variables:
+    IMAGE_RELEASE: "true"
+    SELECTOR_TAG: "shift"
+  tags:
+    - production
+    - deploy
+  script:
+    - move_project
+  only:
+    refs:
+      - tags
+    variables:
+      - $MOVE_K8S_NS == "yes"
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  when: manual
+
+.staging dev:
+  stage: deploy
+  script: echo 1
+  only: [external]
+
+.staging m:
+  extends: .staging dev

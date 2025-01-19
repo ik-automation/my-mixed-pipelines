@@ -1,0 +1,426 @@
+# source:
+# - https://github.com/yoshinobu-kagami/yoshinobu-kagami4994/blob/master/.github/workflows/test.yml
+# tags: ['github action', 'coruse', 'exercies']
+
+name: exercices
+
+on:
+  pull_request:
+    branches: [ master ]
+jobs:
+  review_02_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '02_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_03_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '03_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_04_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '04_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_05_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '05_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_06_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '06_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_07_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '07_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_08_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '08_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_09_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '09_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_10_exercise_01:
+    runs-on: ubuntu-latest
+    if: github.head_ref == '10_exercise_01'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['mentor-review']
+          })
+  review_continuous_exercise_04:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_04'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_05:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_05'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_06:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_06'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_07:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_07'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_08:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_08'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_09:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_09'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })
+  review_continuous_exercise_10:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'continuous_exercise_10'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: autoapprove
+      if: success()
+      uses: hmarr/auto-approve-action@v2.0.0
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+    - name: Add label
+      uses: actions/github-script@0.9.0
+      if: success()
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          github.issues.addLabels({
+            issue_number: context.payload.pull_request.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['merge']
+          })

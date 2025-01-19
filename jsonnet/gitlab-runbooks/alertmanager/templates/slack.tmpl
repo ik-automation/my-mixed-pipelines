@@ -1,0 +1,19 @@
+# Using gitlab defined templates we setup what slack looks like
+{{ define "slack.title" }}{{ template "gitlab.title" . }}{{ end }}
+{{ define "slack.text" }}{{ template "gitlab.text" . }}{{ end }}
+{{ define "slack.icon" }}{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "warn" }}:poke:{{ else }}:dumpster_on_fire:{{ end }}{{ else }}:whew:{{ end }}{{ end }}
+{{ define "slack.link" }}{{ template "gitlab.runbook.link" . }}{{ end }}
+{{ define "slack.color" }}{{ if eq .CommonLabels.severity "warn" }}{{ template "slack.warn.color" . }}{{ else }}{{ template "slack.crit.color" . }}{{ end }}{{ end }}
+{{ define "slack.crit.color" }}{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}{{ end }}
+{{ define "slack.warn.color" }}{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}{{ end }}
+{{ define "slack.channel" }}{{ if eq .CommonLabels.channel "" }}#alerts{{ else }}{{ .CommonLabels.channel }}{{ end }}{{ end }}
+# This template is useful to debug the values that can be handled and used to build the alerts
+{{ define "slack.debug" }}
+Receiver: {{ .Receiver }}
+Status: {{ .Status }}
+ExternalURL: {{ .ExternalURL }}
+GroupLabels: {{ printf "%#v" .GroupLabels }}
+CommonLabels: {{ printf "%#v" .CommonLabels }}
+CommonAnnotations: {{ printf "%#v" .CommonAnnotations }}
+Alerts: {{ printf "%#v" .Alerts }}
+{{ end }}

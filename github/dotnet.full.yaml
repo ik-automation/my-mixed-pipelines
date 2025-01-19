@@ -1,0 +1,220 @@
+---
+source: https://github.com/ExRam/ExRam.Gremlinq/blob/main/.github/workflows/build.yml
+tags: ['github action', 'c#', 'dotnet', 'tweet', 'ubuntu', 'pull request', 'jobs', 'multi', 'shared']
+---
+
+name: Build + Test
+
+on:
+  push:
+    branches:
+      - main
+      - rel
+  pull_request:
+
+env:
+  IsForkedRepository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+  DotNetVersion: '5.0.201'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      semVer2: ${{ steps.nbgv.outputs.SemVer2 }}
+      isPrerelease: ${{ steps.nbgv.outputs.PrereleaseVersionNoLeadingHyphen != '' }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        submodules: 'true'
+
+    - name: Setup .NET Core ${{ env.DotNetVersion }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DotNetVersion }}
+
+    - name: Install dotnet-validate
+      run: dotnet tool install -g dotnet-validate --version 0.0.1-preview.130
+
+    - name: Determine semantic version
+      uses: dotnet/nbgv@master
+      id: nbgv
+
+    - name: Build
+      run: dotnet build --configuration Release -p:ContinuousIntegrationBuild=true
+
+    - name: Validate nuget packages
+      run: dotnet validate package local **/ExRam.*.nupkg
+
+    - name: Copy NuGet packages to artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: NuGetPackages
+        path: ./**/ExRam.*.nupkg
+        if-no-files-found: error
+
+  test-linux:
+    runs-on: ubuntu-latest
+
+    services:
+      gremlinServer:
+        image: tinkerpop/gremlin-server
+        ports:
+          - 8182:8182
+      janusgraph:
+        image: janusgraph/janusgraph
+        ports:
+          - 8183:8182
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        submodules: 'true'
+
+    - name: Setup .NET Core ${{ env.DotNetVersion }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DotNetVersion }}
+
+    - name: Test
+      run: dotnet test  --configuration Release --verbosity normal -p:RunGremlinServerIntegrationTests=${{ env.IsForkedRepository == 'false' }} -p:RunJanusGraphIntegrationTests=${{ env.IsForkedRepository == 'false' }}
+
+    - name: Copy *.received-files to artifacts
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-linux-received-snapshots
+        path: ./**/*.received.*
+
+  test-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        submodules: 'true'
+
+    - name: Start CosmosDb Emulator
+      uses: southpolesteve/cosmos-emulator-github-action@v1
+      env:
+        AZURE_COSMOS_EMULATOR_GREMLIN_ENDPOINT: true
+
+    - name: Setup .NET Core ${{ env.DotNetVersion }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DotNetVersion }}
+
+    - name: Test
+      run: dotnet test  --configuration Release --verbosity normal -p:RunCosmosDbEmulatorIntegrationTests=${{ env.IsForkedRepository == 'false' }}
+
+    - name: Copy *.received-files to artifacts
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-windows-received-snapshots
+        path: ./**/*.received.*
+
+  create-snapshot-fix-pr:
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    needs: [ test-linux, test-windows ]
+    env:
+      pr-message: 'Fix snapshots for #${{ github.event.number }}.'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/download-artifact@v2
+      continue-on-error: true
+      with:
+        name: test-linux-received-snapshots
+
+    - uses: actions/download-artifact@v2
+      continue-on-error: true
+      with:
+        name: test-windows-received-snapshots
+
+    - name: Rename received files
+      run: find . -type f -name '*.received.*' | while read FILE ; do newfile="$(echo ${FILE} |sed -e 's/received/verified/')"; mv "${FILE}" "${newfile}"; done
+
+    - name: Create snapshot changes pull request
+      uses: peter-evans/create-pull-request@v3
+      with:
+        commit-message: ${{ env.pr-message }}
+        title: ${{ env.pr-message }}
+        body: ${{ env.pr-message }}
+        base: ${{ github.head_ref }}
+        branch-suffix: short-commit-hash
+
+  publish:
+    needs: [ build, test-linux, test-windows ]
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+
+    steps:
+    - name: Setup .NET Core ${{ env.DotNetVersion }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DotNetVersion }}
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: NuGetPackages
+
+    - name: Push NuGet packages to GitHub packages
+      if: ${{ github.ref == 'refs/heads/main' }}
+      run: dotnet nuget push **/ExRam.*.nupkg
+        --source https://nuget.pkg.github.com/exram/index.json
+        --api-key ${{ secrets.GITHUB_TOKEN }}
+        --no-symbols true
+        --skip-duplicate
+
+    - name: Push NuGet packages to NuGet.org
+      if: ${{ github.ref == 'refs/heads/rel' }}
+      run: dotnet nuget push **/ExRam.*.nupkg
+        --source https://api.nuget.org/v3/index.json
+        --api-key ${{ secrets.NUGET_DEPLOY_KEY }}
+        --no-symbols true
+        --skip-duplicate
+
+  announce:
+    needs: [ build, publish ]
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/rel' }}
+
+    steps:
+    - name: Draft release
+      uses: release-drafter/release-drafter@v5.15.0
+      with:
+        name: ExRam.Gremlinq ${{ needs.build.outputs.semVer2 }}
+        prerelease: ${{ needs.build.outputs.isPrerelease }}
+        tag: ${{ needs.build.outputs.semVer2 }}
+        commitish: ${{ github.ref }}
+        publish: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Send announcement tweet!
+      if: ${{ needs.build.outputs.isPrerelease == 'false' }}
+      uses: ethomson/send-tweet-action@v1
+      with:
+        status: |
+          Announcing the release of ExRam.Gremlinq ${{ needs.build.outputs.semVer2 }}!
+
+          ExRam.Gremlinq is the first #dotnet object-graph-mapper for @apachetinkerpop #gremlin enabled #graphdb‎s like @AzureCosmosDB, #AWS #Neptune or @JanusGraph.
+
+          https://github.com/ExRam/ExRam.Gremlinq/releases/tag/${{ needs.build.outputs.semVer2 }}
+        consumer-key: ${{ secrets.TWITTER_CONSUMER_API_KEY }}
+        consumer-secret: ${{ secrets.TWITTER_CONSUMER_API_SECRET }}
+        access-token: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+        access-token-secret: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}

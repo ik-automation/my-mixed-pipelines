@@ -1,0 +1,80 @@
+name: show.logs
+# description: "show 'logs' for apps"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          # - dev
+          - stage
+          - prod
+      service:
+        description: "Service for which show the logs."
+        required: false
+        default: api
+        type: choice
+        options:
+          - api
+          - auth-service
+          - ui-client
+      tail:
+        description: "Lines of recent log file to display"
+        required: false
+        default: 200
+
+env:
+  SOURCE_REPO_PATH: source
+  # defaults
+  DEFAULT_ENV: dev
+  DEFAULT_BRANCH: develop
+  PROJECT: singleton
+  # should be in inputs
+  # TODO: understand what to do with them
+  SERVICE_NAME: api
+  AWS_DEFAULT_REGION: us-west-2
+  TAIL: 200
+  NAMESPACE: app
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          debug: ${{ github.event.inputs.debug || false }}
+
+      - name: bootstrap-aws
+        id: aws
+        uses: ./.github/actions/bootstrap-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: bootstrap-and-show-logs
+        run: |
+          ./scripts/k8s.sh bootstrap
+          echo "++++LOGS+++++"
+          kubectl logs deployment/${SERVICE_NAME} --tail=${{ github.event.inputs.tail || env.TAIL }}
+        env:
+          WORKING_DIRECTORY: ${{ env.SOURCE_DIRECTORY }}
+          ENVIRONMENT: ${{ steps.info.outputs.env }}
+          SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+          SERVICE_NAME: ${{ steps.info.outputs.service_name }}
+          REGION: ${{ env.AWS_DEFAULT_REGION }}
+          CLUSTER_NAME: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-cluster
+          TIMESTAMP: ${{ steps.info.outputs.TIMESTAMP }}

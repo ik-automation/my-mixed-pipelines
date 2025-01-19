@@ -1,0 +1,33 @@
+name: test.all-svc
+# description: "'serverless' functions to deploy"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+
+env:
+  DEFAULT_ENV: dev
+
+jobs:
+  tests-all-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: run tests
+        run: |
+          python ./scripts/test_health_all.py --env ${ENV}
+          python ./scripts/test_redirects.py --env ${ENV}
+        env:
+          ENV: ${{ github.event.inputs.env || env.DEFAULT_ENV }}

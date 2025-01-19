@@ -1,0 +1,31 @@
+---
+source:
+- https://jasonet.co/posts/scheduled-actions
+tags: ['github action', 'cron', 'meeting notes']
+---
+
+name: Create our Weekly Meeting notes issue
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+jobs:
+  issue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: JasonEtco/create-an-issue@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          filename: .github/ISSUE_TEMPLATE/meeting-notes.md
+
+`meeting-notes.md`
+
+---
+name: Weekly Meeting Notes
+about: Used for taking notes in our daily standups, with a new issue every week.
+title: "Weekly Meeting Notes: {{ date | date('MMMM Do') }} - {{ date | date('add', 5, 'days') | date('Do') }}"
+labels:
+  - "Meeting 💬"
+---
+### Monday, {{ date | date('MMM Do') }}

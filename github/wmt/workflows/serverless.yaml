@@ -1,0 +1,106 @@
+name: serverless
+# description: "'serverless' functions to deploy"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+          - "prod"
+      branch:
+        description: "Choose the branch from which to build"
+        required: false
+        default: develop
+
+env:
+  NODE_VERSION: 14.x
+  SOURCE_REPO: company/singleton-serverless
+  SOURCE_DIRECTORY: source
+  SOURCE_REPO_PATH: source
+  # defaults
+  DEFAULT_ENV: dev
+  DEFAULT_BRANCH: develop
+  ARTIFACT_RETENTION_DAYS: 1
+  PROJECT: singleton
+  # should be in inputs
+  # TODO: understand what to do with them
+  STACK_PREFIX: "video-pipeline"
+  SERVICE_NAME: "video-pipeline"
+  AWS_DEFAULT_REGION: us-west-2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: checkout-source-repository
+        # https://github.com/actions/checkout
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: "5"
+          path: ${{ env.SOURCE_REPO_PATH }}
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          debug: ${{ github.event.inputs.debug || false }}
+
+      - name: bootstrap-nodejs-${{ env.NODE_VERSION }}
+        id: bootstrap-node
+        uses: ./.github/actions/bootstrap-nodejs
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          source-directory: ${{ env.SOURCE_DIRECTORY }}
+
+      - name: bootstrap-aws
+        id: aws
+        uses: ./.github/actions/bootstrap-aws
+        with:
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: bootstrap-and-build
+        run: |
+          ./scripts/serverless.sh bootstrap
+          ./scripts/serverless.sh build
+          ./scripts/serverless.sh update_function_code
+        env:
+          WORKING_DIRECTORY: ${{ env.SOURCE_DIRECTORY }}
+          ENVIRONMENT: ${{ steps.info.outputs.env }}
+          AWS_DEFAULT_REGION: ${{ steps.info.outputs.region }}
+          PROJECT: ${{ env.PROJECT }}
+
+      - name: send-slack
+        if: always()
+        uses: ./.github/actions/slack
+        with:
+          payload: |
+            {
+              "service": "${{ env.SERVICE_NAME }}",
+              "buildurl": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+              "rebuildurl": "https://github.com/${{github.repository}}/actions/workflows/${{github.workflow}}.yaml",
+              "status": "${{ job.status }}",
+              "env": "${{ steps.info.outputs.env }}",
+              "version": "${{ steps.info.outputs.service_version }}",
+              "actor": "https://github.com/${{ github.actor }}"
+            }
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

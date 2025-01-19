@@ -1,0 +1,27 @@
+# .gitlab-ci.yml
+stages:
+  - build
+  - generate-services
+  - trigger-services
+
+build-job:
+  stage: build
+  script:
+    - echo "Hello, $GITLAB_USER_LOGIN!"
+
+generate-service-pipelines:
+  stage: generate-services
+  needs:
+    - build-job
+  script:
+    - python3 services_generator.py A,B,C
+  artifacts:
+    paths:
+      - services.yml
+
+trigger-service-pipelines:
+  stage: trigger-services
+  trigger:
+    include:
+      - artifact: services.yml
+        job: generate-service-pipelines

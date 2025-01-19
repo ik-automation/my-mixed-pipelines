@@ -1,0 +1,12 @@
+---
+source: https://github.com/aws-samples/aws-codebuild-samples/blob/master/buildspecs/environment.yml
+tags: ['codebuild', 'script']
+---
+
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - ./ci_tools/update_shrinkwrap.sh
+      

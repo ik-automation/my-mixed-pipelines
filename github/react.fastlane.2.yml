@@ -1,0 +1,46 @@
+---
+source: https://www.gitstart.com/post/automatic-deployment-of-react-native-ios-apps-with-fastlane-and-github-actions
+tags: ['github action', 'react native', 'fastlane', 'ios']
+---
+
+on: push
+name: Build
+jobs:
+  build:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        node-version: [12.17.0]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Install pods
+        run: cd ios && pod install
+
+      - name: Create IPA Build
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          GIT_REPO_URL: ${{ secrets.GIT_REPO_URL }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          CI_KEYCHAIN_NAME: ${{ secrets.CI_KEYCHAIN_NAME }}
+          CI_KEYCHAIN_PASSWORD: ${{ secrets.CI_KEYCHAIN_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        run: fastlane ios beta
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v1
+        with:
+          name: sample.ipa
+          path: fastlane/builds/

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "poetry": {
+    "fileMatch": [
+      "pyproject.toml"
+    ],
+  },
+  "pip_requirements": {
+    "fileMatch": [
+      "requirements-test.txt",
+      "requirements-composer.txt",
+      "constraints.txt",
+      "constraints-test.txt",
+    ]
+  },
+  "ignorePaths": [
+    "python/composer/**/constraints.txt",
+    "python/composer/blog/**/constraints.txt",
+    "python/composer/airflow_1_samples/requirements.txt",
+    "python/appengine/standard",
+  ],
+  "packageRules": [
+    {
+      "matchCategories": [
+        "python"
+      ], // DO NOT EDIT: Limits this file's configurations to Python code.
+      "groupName": "python-nonmajor",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+    },
+    {
+      "matchCategories": [
+        "python"
+      ], // DO NOT EDIT: Limits this file's configurations to Python code.
+      "groupName": "OpenTelemetry",
+      "matchPackagePrefixes": [
+        "opentelemetry-"
+      ],
+    },
+    {
+      "matchCategories": [
+        "python"
+      ], // DO NOT EDIT: Limits this file's configurations to Python code.
+      "matchPackagePatterns": [
+        "pytest"
+      ],
+      "separateMinorPatch": true,
+    },
+    {
+      "matchCategories": [
+        "python"
+      ], // DO NOT EDIT: Limits this file's configurations to Python code.
+      "matchPackagePatterns": [
+        "pytest"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "enabled": false
+    },
+  ],
+}

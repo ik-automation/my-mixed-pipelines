@@ -1,0 +1,46 @@
+# source:
+# - https://github.com/search?o=desc&q=snyk%2Factions/node+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/fabasoad/yaml-json-xml-converter-action/blob/main/.github/workflows/security-tests.yml
+# tags: ['github action', 'snyk', 'security', 'rust', audit]
+
+---
+name: Security Tests
+
+on:
+  push:
+    branches:
+      - main
+      - 'bugfix/**'
+      - 'feature/**'
+  schedule:
+    - cron: '25 2 * * 6'
+
+jobs:
+  snyk_tests:
+    name: Snyk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+        with:
+          ref: ${{ github.ref }}
+      - uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_API_TOKEN }}
+  codeql_tests:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2.3.4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v1
+        with:
+          languages: ${{ matrix.language }}
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v1
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v1

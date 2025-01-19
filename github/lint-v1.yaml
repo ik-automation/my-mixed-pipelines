@@ -1,0 +1,27 @@
+name: lint-generated
+on:
+  push:
+    paths:
+      - '.github/workflows/lint-generated.yml'
+      - '.github/workflows/generated-ci.yml'
+      - '.github/workflows/generated-cd.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Node
+        uses: actions/setup-node@v1
+      - name: Validate Dependencies
+        run: ./tools/check
+      - name: Generate Workflows
+        run: ./tools/generate
+      - name: Check changed
+        run: |
+          if [[ `git status --porcelain` ]]; then
+            echo "Workflow files are not in sync!"
+            exit 1
+          else
+            echo "Workflow files are in sync. Good to go!"
+          fi

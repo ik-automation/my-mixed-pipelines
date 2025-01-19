@@ -1,0 +1,32 @@
+# @generated
+
+name: CI samlang-demo
+on:
+  push:
+    paths:
+      - packages/lib-react/**
+      - packages/samlang-demo/**
+      - package.json
+      - yarn.lock
+      - configuration/**
+      - .github/workflows/generated-*-samlang-demo.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Node
+        uses: actions/setup-node@v1
+      - name: Use Yarn Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/yarn
+          key: yarn-${{ hashFiles(format('{0}{1}', github.workspace, '/yarn.lock')) }}
+          restore-keys: yarn-
+      - name: Yarn Install
+        run: yarn install
+      - name: Compile
+        run: yarn workspace samlang-demo compile
+      - name: Test
+        run: yarn workspace samlang-demo test

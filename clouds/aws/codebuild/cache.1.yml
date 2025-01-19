@@ -1,0 +1,44 @@
+---
+source: https://mechanicalrock.github.io/2019/02/03/monorepos-aws-codebuild.html
+tags: ['cache', 'codebuild', 'build']
+---
+
+version: 0.2
+phases:
+  install:
+    commands:
+      # npm configuration
+      # here i configure npm to set the cache at /root/.npm
+      - npm config -g set prefer-offline true
+      - npm config -g set cache /root/.npm
+      - npm config get cache
+
+      - cd ${CODEBUILD_SRC_DIR}
+      # perform a CI installation of base packages
+      - npm ci
+
+  pre_build:
+    commands:
+      # Clean entire monorepo and install dependent packages
+      - ./node_modules/.bin/lerna bootstrap --ci --ignore-scripts --concurrency 4
+
+  build:
+    commands:
+      # Build everything
+      - ./node_modules/.bin/lerna run build --concurrency 4
+
+  post_build:
+    commands:
+      # execute all the tests
+      - NODE_OPTIONS="--max-old-space-size=4096" ./node_modules/.bin/jest --ci --config=jest.config.ci.js --coverage=true --no-cache --maxWorkers=4
+
+artifacts:
+  files:
+    # include built artefacts
+
+
+# At this step, we instruct codebuild to cache all items that in the NPM Cache
+# that we configured earlier
+cache:
+  paths:
+    - /root/.npm/**/*

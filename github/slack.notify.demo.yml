@@ -1,0 +1,36 @@
+# https://github.com/search?o=desc&q=rtCamp%2Faction-slack-notify+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# https://github.com/rtCamp/action-slack-notify
+# https://github.com/marketplace/actions/slack-notify
+# https://emojipedia.org/google/
+---
+name: slack-notification-demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch from which to build the app
+        required: true
+        default: 'srpint-14'
+
+env:
+  SLACK_ICON_EMOJI: '🍎'
+  ROBOT: '🤖'
+
+jobs:
+  slackNotification:
+    name: Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: success-slack-notification
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_USERNAME: android
+        SLACK_TITLE: sucess
+        SLACK_MESSAGE: 'Post Content :rocket:'
+        SLACK_FOOTER: success-footer
+        SLACK_COLOR: ${{ job.status }}

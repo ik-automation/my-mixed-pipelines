@@ -1,0 +1,47 @@
+.rules dev:
+  stage: build
+  allow_failure: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/ && $JOB_MANUAL == "true" && $ALLOW_FAILURE == "false"'
+      when: manual
+      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/ && $JOB_MANUAL == "false" && $ALLOW_FAILURE == "false"'
+      allow_failure: false
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/ && $JOB_MANUAL == "true"'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/ && $JOB_MANUAL == "false"'
+      when: on_success
+    - when: never
+
+.rules stg:
+  stage: build
+  allow_failure: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk|master)$/ && $JOB_MANUAL == "true" && $ALLOW_FAILURE == "false"'
+      when: manual
+      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk|master)$/ && $JOB_MANUAL == "false" && $ALLOW_FAILURE == "false"'
+      allow_failure: false
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk|master)$/ && $JOB_MANUAL == "true"'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk|master)$/ && $JOB_MANUAL == "false"'
+      when: on_success
+    - when: never
+
+.rules prod:
+  stage: pre-deploy
+  allow_failure: true
+  rules:
+    - if: '$DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/ && $JOB_MANUAL == "true" && $ALLOW_FAILURE == "false"'
+      when: manual
+      allow_failure: false
+    - if: '$DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/ && $JOB_MANUAL == "false" && $ALLOW_FAILURE == "false"'
+      allow_failure: false
+      when: on_success
+    - if: '$DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/ && $JOB_MANUAL == "true"'
+      when: manual
+    - if: '$DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/ && $JOB_MANUAL == "false"'
+      when: on_success
+    - when: never

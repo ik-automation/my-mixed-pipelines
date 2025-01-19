@@ -1,0 +1,100 @@
+.migration:
+  extends: .ci_function
+  stage: pre-deploy
+  variables:
+    RELEASE_PATH: "/$CI_COMMIT_REF_SLUG"
+    # GIT_DEPTH: "0"
+  tags:
+    - staging
+  script:
+    - run_migration
+  rules:
+    - if: '$MIGRATION_FOLDER'
+      when: manual
+    - when: never
+
+.migrate_stg:
+  extends: .migration
+  tags:
+    - staging
+    - migration
+  resource_group: staging-migration/$CI_COMMIT_REF_SLUG
+
+.migrate:stg dryrun:
+  extends: .migrate_stg
+  variables:
+    MIGRATION_INPUT_PARAMS: "--dryrun"
+    STAGE: "staging"
+  allow_failure: false
+  rules:
+    - if: '$MIGRATION_FOLDER && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk)$/'
+      when: on_success
+    - when: never
+
+.migrate:stg:
+  extends: .migrate_stg
+  variables:
+    STAGE: "staging"
+  allow_failure: true
+  rules:
+    - if: '$MIGRATION_FOLDER && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME =~ /^((release|hotfix)\/.+|release|stable|trunk)$/'
+      when: manual
+    - when: never
+
+.migrate_dev:
+  extends: .migration
+  tags:
+    - development
+    - migration
+  resource_group: development-migration/$CI_COMMIT_REF_SLUG
+
+.migrate:dev dryrun:
+  extends: .migrate_dev
+  variables:
+    MIGRATION_INPUT_PARAMS: "--dryrun"
+    STAGE: "development"
+  allow_failure: false
+  rules:
+    - if: '$MIGRATION_FOLDER && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/'
+      when: on_success
+    - when: never
+
+.migrate:dev:
+  extends: .migrate_dev
+  variables:
+    STAGE: "development"
+  allow_failure: true
+  rules:
+    - if: '$MIGRATION_FOLDER && $CI_COMMIT_BRANCH && $CI_COMMIT_REF_NAME !~ /^((release|hotfix)\/.+|release|stable|trunk)$/'
+      when: manual
+    - when: never
+
+.migrate_prod:
+  extends: .migration
+  tags:
+    - production
+    - migration
+  allow_failure: false
+  resource_group: production-migration
+
+.migrate:prod dryrun:
+  extends: .migrate_prod
+  variables:
+    MIGRATION_INPUT_PARAMS: "--dryrun"
+    RELEASE_PATH: "/release"
+    STAGE: "production"
+  rules:
+    - if: '$MIGRATION_FOLDER && $DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/'
+      when: on_success
+    - when: never
+
+.migrate:prod:
+  extends: .migrate_prod
+  variables:
+    RELEASE_PATH: "/release"
+    STAGE: "production"
+  rules:
+    - if: '$MIGRATION_FOLDER && $DEPLOY_TAG != "" && $CI_COMMIT_TAG && $CI_COMMIT_REF_NAME !~ /^.*\/.*$/'
+      when: manual
+    - when: never
+

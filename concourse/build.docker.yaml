@@ -1,0 +1,124 @@
+# https://github.com/sirech/example-concourse-pipeline/blob/master/pipeline.yml
+resources:
+- name: git
+  type: git
+  source:
+    uri: git@github.com:sirech/example-concourse-pipeline.git
+    branch: master
+
+- name: dev-container
+  type: docker-image
+  source:
+    repository: AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/dev-container
+
+- name: serverspec-container
+  type: docker-image
+  source:
+    repository: AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/serverspec-container
+
+jobs:
+- name: prepare
+  serial: true
+  plan:
+  - get: git
+    trigger: true
+  - aggregate:
+      - put: dev-container
+        params:
+          <<: *docker-params
+          build: git
+          dockerfile: git/Dockerfile.build
+      - put: serverspec-container
+        params:
+          <<: *docker-params
+          build: git/serverspec
+          dockerfile: git/serverspec/Dockerfile.serverspec
+
+  - task: serverspec
+    privileged: true
+    image: serverspec-container
+    params:
+      IMAGE_NAME: dev-container
+    file: git/pipeline/tasks/serverspec.yml
+  - task: pipeline
+    image: dev-container
+    params:
+      CONCOURSE_USER: concourse
+      CONCOURSE_PASSWORD: ((concourse_password)
+    file: git/pipeline/tasks/update_pipeline.yml
+
+- name: lint
+  serial: true
+  plan:
+  - aggregate:
+    - get: git
+      passed: [prepare]
+      trigger: true
+    - get: dev-container
+      passed: [prepare]
+  - aggregate:
+    - task: lint-sh
+      image: dev-container
+      params:
+        <<: *common-params
+        TARGET: sh
+      file: git/pipeline/tasks/linter/task.yml
+    - task: lint-js
+      image: dev-container
+      params:
+        <<: *common-params
+        TARGET: js
+      file: git/pipeline/tasks/linter/task.yml
+    - task: lint-css
+      image: dev-container
+      params:
+        <<: *common-params
+        TARGET: css
+      file: git/pipeline/tasks/linter/task.yml
+    - task: lint-docker
+      image: dev-container
+      params:
+        <<: *common-params
+        TARGET: docker
+      file: git/pipeline/tasks/linter/task.yml
+
+- name: test
+  serial: true
+  plan:
+  - aggregate:
+    - get: git
+      passed: [prepare]
+      trigger: true
+    - get: dev-container
+      passed: [prepare]
+  - task: test-js
+    image: dev-container
+    params:
+      <<: *common-params
+      TARGET: js
+    file: git/pipeline/tasks/tests/task.yml
+
+- name: build
+  serial: true
+  plan:
+  - aggregate:
+    - get: git
+      passed: [lint, test]
+      trigger: true
+    - get: dev-container
+      passed: [lint, test]
+  - task: build-dev
+    image: dev-container
+    params:
+      <<: *common-params
+    file: git/pipeline/tasks/build/task.yml
+
+common-params: &common-params
+  CI: true
+  NPM_TOKEN: ((npm_auth_token))
+
+docker-params: &docker-params
+  tag: git/.git/HEAD
+  tag_as_latest: true
+  cache: true
+  cache_tag: latest

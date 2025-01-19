@@ -1,0 +1,109 @@
+currentBuild.description = """
+Read secrets and migrate database
+"""
+
+pipeline {
+  agent any
+	options {
+    buildDiscarder(logRotator(numToKeepStr:'5'))
+    timeout(time:15, unit: 'MINUTES')
+    disableConcurrentBuilds()
+	}
+  environment {
+    SOLUTION_PATH        = 'dbmigrations'
+    BASH_SCRIPTS         = "ci/scripts/jenkins"
+    PY_SCRIPTS           = "ci/scripts/py"
+    DB_SECRETS_NAMESPACE = "${PREFIX}/${ENVIRONMENT}/sqlserver"
+  }
+  stages {
+    stage('Pull Repository') {
+      steps {
+        checkout scm
+        echo "AWS region: $AWS_REGION"
+        echo "AWS default region: $AWS_REGION"
+        echo "AWS account id: $AWS_ACCOUNT_ID"
+        echo "PREFIX: $PREFIX"
+        echo "env: $ENVIRONMENT"
+        echo "secret namespace: $DB_SECRETS_NAMESPACE"
+      }
+    }
+    stage('migrate database') {
+      stages {
+        stage('fetch secrets from secrets store. test connection') {
+          agent {
+            docker {
+              image 'cloudkats/ci-tools:1.0'
+              args  '--net=host'
+            }
+          }
+          steps {
+            echo "- ${STAGE_NAME} -"
+            dir("$SOLUTION_PATH"){
+              sh 'pwd'
+              sh '$WORKSPACE/$BASH_SCRIPTS/db_interpolate.secrets.sh'
+              stash name: "data", includes: "var/envs"
+              sh 'rm -rf ./var'
+            }
+          }
+        }
+        stage('create table and a user') {
+          agent {
+            docker {
+              image 'microsoft/mssql-tools'
+              args  '-u root --net=host'
+            }
+          }
+          steps {
+            echo "- ${STAGE_NAME} -"
+            dir("$SOLUTION_PATH"){
+              unstash "data"
+              sh '$WORKSPACE/$BASH_SCRIPTS/db_create.sh'
+              sh 'rm -rf ./var'
+            }
+          }
+        }
+        stage('uppdate database schema') {
+          agent {
+            docker {
+              image 'boxfuse/flyway:5.2.4'
+              args  "-u root --entrypoint='' --net=host"
+            }
+          }
+          steps {
+            dir("$SOLUTION_PATH"){
+              sh 'ls -la .'
+              unstash "data"
+              sh '$WORKSPACE/$BASH_SCRIPTS/db_migrate.sh'
+              sh 'rm -rf ./var'
+            }
+          }
+          post {
+            failure {
+              dir("$SOLUTION_PATH"){
+                echo "Post-Build result: ${currentBuild.result}"
+                echo "Post-Build currentResult: ${currentBuild.currentResult}"
+                unstash "data"
+                sh '$WORKSPACE/$BASH_SCRIPTS/db_fix_schema.sh'
+                sh 'rm -rf ./var'
+                stash name: "data", excludes: "**", allowEmpty: true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  post {
+    always {
+      echo 'Database is updated!'
+      echo "RESULT: ${currentBuild.result}"
+    }
+    cleanup{
+      deleteDir()
+      echo 'Workspace cleanup to happen!'
+    }
+    failure {
+      echo "Failed"
+    }
+  }
+}

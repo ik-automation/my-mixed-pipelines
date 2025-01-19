@@ -1,0 +1,34 @@
+# source:
+# - https://github.com/search?o=desc&q=anchore%2Fscan-action+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/sourcegraph/sourcegraph/blob/6afadc4b879392073740c2f4588a73bedfb443c8/.github/workflows/container-scanning.yml
+# - https://github.com/anchore/scan-action
+# - https://anchore.com/blog/github-actions-tutorial/
+# tags: ['github action', 'scan', 'container', analyze, security, audit]
+
+name: Scan latest container
+on:
+  schedule:
+  - cron: '5 5 * * *'
+
+jobs:
+  scan:
+    name: container-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scan image
+        uses: anchore/scan-action@v2
+        with:
+          image: "sourcegraph/server:insiders"
+          acs-report-enable: true
+          act-report-severity-cutoff: "Medium"
+          fail-build: false
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: results.sarif
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2.2.2
+        with:
+          name: AnchoreReports
+          path: ./anchore-reports/

@@ -1,0 +1,18 @@
+# https://codeberg.org/forgejo-contrib/forgejo-helm/src/branch/main/e2e/kind.cluster.yml
+# based on https://github.com/kind-ci/examples
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: chart-testing
+networking:
+  apiServerAddress: '0.0.0.0'
+
+nodes:
+  # add to the apiServer certSANs the name of the drone service in order to be able to reach the cluster through it
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          certSANs:
+          - docker
+  - role: worker

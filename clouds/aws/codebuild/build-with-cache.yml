@@ -1,0 +1,20 @@
+---
+source: https://github.com/aws-samples/aws-codebuild-samples/blob/master/buildspecs/build-test-suite-1.yml
+tags: ['npm', 'codebuild', 'cache']
+---
+
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - npm install
+  build:
+    commands:
+      - npm test
+cache:
+  paths:
+    - 'node_modules/**/*'
+artifacts:
+  files:
+    - '**/*'

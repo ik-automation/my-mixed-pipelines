@@ -1,0 +1,22 @@
+groups:
+- name: GitLab Timestamps of breaches of the MTBF failure thresholds
+  partial_response_strategy: "warn"
+  interval: 1m
+  rules:
+  - record: 'gitlab_slo:last_violation_leading_timestamp'
+    expr: |
+      (
+        # If the series has been down for 1 minute record the start of that timestamp (60 seconds ago)
+        timestamp(avg_over_time(gitlab_mtbf_health:service[1m]) < 1) - 60
+        # only if the service was up for at least 15 minutes before that
+        and
+        avg_over_time(gitlab_mtbf_health:service[15m] offset 1m) == 1
+      )
+      or # Otherwise, use the previous value, if the series still exists
+      (
+        # give us the most recent value, allowing for gaps (due to prometheus availability of up to 15m)
+        max_over_time(gitlab_slo:last_violation_leading_timestamp[15m])
+        and
+        # But only continue to propagate series if there are values within the last 15m (garbage collection)
+        avg_over_time(gitlab_mtbf_health:service[15m])
+      )

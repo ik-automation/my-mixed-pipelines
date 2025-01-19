@@ -1,0 +1,167 @@
+name: ui.client
+# description: "API 'Service'"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+      branch:
+        description: "Choose the branch from which to build"
+        required: false
+        default: develop
+      build-image:
+        description: 'Build new image. When "false" reuse image from same branch if already being built. 🛠️IN PROGRESS🛠️'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  SOURCE_REPO: company/video-platform
+  SOURCE_DIRECTORY: source/company.FrontEnd_nextjs
+  SOURCE_REPO_PATH: source
+  # defaults
+  DEFAULT_ENV: dev
+  DEFAULT_BRANCH: develop
+  PROJECT: singleton
+  KUBECONFIG: cluster.kube_config
+  NAMESPACE: app
+  # TODO: understand what to do with them
+  SERVICE_NAME: ui-client
+  AWS_DEFAULT_REGION: us-west-2
+  ECR_REPOSITORY: singleton-ui
+  DOCKERFILE: Dockerfile.Client
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: checkout-source-repository
+        # https://github.com/actions/checkout
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH }}
+          fetch-depth: "5"
+          path: ${{ env.SOURCE_REPO_PATH }}
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          debug: ${{ github.event.inputs.debug || false }}
+          build-image: ${{ github.event.inputs.build-image }}
+
+      - name: bootstrap-aws
+        id: aws
+        uses: ./.github/actions/bootstrap-aws
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: build-tag-push-to-ecr
+        id: build-image
+        if: ${{ github.event.inputs.build-image == 'true' }}
+        env:
+          WORKING_DIRECTORY: ${{ env.SOURCE_REPO_PATH }}
+          IMAGE: "${{ steps.aws.outputs.registry }}/${{ env.ECR_REPOSITORY }}-${{ steps.info.outputs.env }}"
+          DOCKERFILE: ${{ env.DOCKERFILE }}
+          IMAGE_TAG: ${{ steps.info.outputs.service_version }}
+          CREATED: ${{ steps.info.outputs.timestamp }}
+          BUILD_URL: ${{ steps.info.outputs.build_url }}
+          SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+          SERVICE_NAME: ${{ steps.info.outputs.service_name }}
+          ENVIRONMENT: ${{ steps.info.outputs.env }}
+          TIMESTAMP: ${{ steps.info.outputs.TIMESTAMP }}
+          BRANCH: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH }}
+        run: |
+          ./scripts/docker.sh build
+          ./scripts/docker.sh push
+
+          echo "::set-output name=image-tag::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "::set-output name=image-branch::$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH_TAG"
+          echo "::set-output name=image-latest::$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: deploy-aws-ecs
+        id: deploy-ecs
+        # if: steps.info.outputs.env == 'dev' || steps.info.outputs.env == 'stage'
+        uses: ./.github/actions/deploy-ecs
+        with:
+          env: ${{ steps.info.outputs.env }}
+          cluster: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-ecs
+          service-name: ${{ env.SERVICE_NAME }}-${{ steps.info.outputs.env }}-svc
+          service-version: ${{ steps.info.outputs.service_version }}
+          image-repository: "${{ steps.aws.outputs.registry }}/${{ env.ECR_REPOSITORY }}-${{ steps.info.outputs.env }}"
+          timeout: 360
+
+      # - name: helm-deploy-${{ env.SERVICE_NAME }}
+      #   id: eks
+      #   if: steps.info.outputs.env == 'non-prod'
+      #   timeout-minutes: 18
+      #   run: |
+      #     ./scripts/k8s.sh bootstrap
+      #     ./scripts/k8s.sh helm_deploy
+
+      #     echo "****TEST****"
+      #     kubectl rollout status deployment/${SERVICE_NAME}
+      #   env:
+      #     WORKING_DIRECTORY: ${{ env.SOURCE_REPO_PATH }}
+      #     ENVIRONMENT: ${{ steps.info.outputs.env }}
+      #     REGION: ${{ env.AWS_DEFAULT_REGION }}
+      #     CLUSTER_NAME: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-cluster
+      #     SERVICE_NAME: ${{ env.SERVICE_NAME }}
+      #     SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+      #     TIMESTAMP: ${{ steps.info.outputs.TIMESTAMP }}
+
+      - name: run-tests
+        run: |
+          python ./scripts/test_version.py --env ${ENV} --version ${VERSION} --svc ${SVC}
+        env:
+          ENV: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          VERSION: ${{ steps.info.outputs.service_version }}
+          SVC: ui
+
+      - name: send-slack
+        # if: always()
+        if: steps.info.outputs.env == 'non-prod'
+        uses: ./.github/actions/slack
+        with:
+          payload: |
+            {
+              "service": "${{ env.SERVICE_NAME }}",
+              "buildurl": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+              "rebuildurl": "https://github.com/${{github.repository}}/actions/workflows/${{github.workflow}}.yaml",
+              "status": "${{ job.status }}",
+              "env": "${{ steps.info.outputs.env }}",
+              "version": "${{ steps.info.outputs.service_version }}",
+              "actor": "${{ github.actor }}"
+            }
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: summary
+        if: ${{ always() }}
+        uses: ./.github/actions/summary
+        with:
+          env: ${{ steps.info.outputs.env }}
+          cluster: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-cluster
+          service-name: ${{ env.SERVICE_NAME }}
+          service-version: ${{ steps.info.outputs.service_version }}

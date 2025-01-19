@@ -1,0 +1,23 @@
+---
+source: https://github.com/marketplace/actions/git-release
+tags: ['github action', 'docker', 'release', 'setup']
+---
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+steps:
+  - name: Release
+    uses: docker://antonyurchenko/git-release:latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DRAFT_RELEASE: "false"
+      PRE_RELEASE: "false"
+      CHANGELOG_FILE: "CHANGELOG.md"
+      ALLOW_EMPTY_CHANGELOG: "false"
+      ALLOW_TAG_PREFIX: "true"
+    with:
+      args: |
+          build/*-amd64.zip

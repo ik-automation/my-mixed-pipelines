@@ -1,0 +1,75 @@
+build-image-pipeline.yml
+https://github.com/ljfranklin/terraform-resource/blob/master/ci/build-image-pipeline.yml
+
+# uncomment time resource to trigger nightly builds
+# uncomment terraform-src trigger to build rc builds
+# uncomment slack tasks to trigger alerts on success / failure
+shared:
+  - &failure-alert
+    put: slack-alert
+    params:
+      silent: true
+      icon_emoji: ":interrobang:"
+      text: |
+        *The <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job failed!*
+  - &success-alert
+    put: slack-alert
+    params:
+      silent: true
+      icon_emoji: ":rocket:"
+      text: |
+        *The <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_PIPELINE_NAME - $BUILD_JOB_NAME> job passed!*
+jobs:
+  - name: push-custom-image
+    plan:
+      - do:
+        - aggregate:
+          # - get: nightly
+          #   trigger: true
+          - get: terraform-src
+            # trigger: true
+          - get: resource-src
+        - task: build-custom-artifacts
+          file: resource-src/ci/tasks/build-custom-artifacts.yml
+        - put: resource-custom-image
+          params:
+            build: build-artifacts/
+        # on_success: *success-alert
+        # on_failure: *failure-alert
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+resources:
+- name: resource-src
+  type: git
+  source:
+    uri: {{resource_git_uri}}
+    branch: {{resource_git_branch}}
+- name: terraform-src
+  type: git
+  source:
+    uri: {{terraform_git_uri}}
+    branch: {{terraform_git_branch}}
+    tag_filter: {{terraform_git_tag_filter}}
+- name: resource-custom-image
+  type: docker-image
+  source:
+    repository: {{docker_repository}}
+    tag: {{docker_tag}}
+    email: {{docker_email}}
+    username: {{docker_username}}
+    password: {{docker_password}}
+# - name: nightly
+#   type: time
+#   source:
+#     start: 12:00 AM -0700
+#     stop: 12:10 AM -0700
+# - name: slack-alert
+#   type: slack-notification
+#   source:
+#     url: {{slack_url}}

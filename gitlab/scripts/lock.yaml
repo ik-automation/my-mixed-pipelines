@@ -1,0 +1,29 @@
+# https://gitlab.com/gitlab-org/gitlab-foss/-/issues/41560
+variables:
+  CONSUL_HOST: http://ip:8500
+  BRANCH_LOCK: ci/${CI_PROJECT_NAME}/${CI_COMMIT_REF_SLUG}
+  ENV_LOCK: ci/${CI_PROJECT_NAME}/${CI_ENVIRONMENT_SLUG}
+
+before_script:
+  - '[ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && curl --header "PRIVATE-TOKEN: $MY_CI_API_TOKEN" -X POST https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/pipelines/$CI_PIPELINE_ID/cancel'
+
+before_script:
+  - '[ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && echo "A newer job is already running. Exiting..." && exit 0'
+after_script:
+  - '[ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && echo "A newer job is already running. Exiting..." && exit 0'
+
+scripts:
+  - consul lock -http-addr=${CONSUL_HOST} --timeout 30m ${BRANCH_LOCK} scripts/docker/run_tests.sh --tag=capybara
+
+before_script:
+  - '[ "${CI_COMMIT_REF_NAME}" = "${CI_COMMIT_TAG}" ] || (
+    [ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && (
+    echo "A newer job is already running. Exiting..." && exit 0) || echo "ok")'
+after_script:
+  - '[ "${CI_COMMIT_REF_NAME}" = "${CI_COMMIT_TAG}" ] || (
+    [ "$(git rev-parse origin/$CI_COMMIT_REF_NAME)" != "$CI_COMMIT_SHA" ] && (
+    echo "A newer job is already running. Exiting..." && exit 0) || echo "ok")'
+
+
+scripts:
+  - consul lock -http-addr=${CONSUL_HOST} --timeout 30m ${ENV_LOCK} cap dev deploy

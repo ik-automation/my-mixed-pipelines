@@ -1,0 +1,152 @@
+variables:
+  RUBY_VERSION: "2.7"
+  DOCKER_VERSION: "20.10.14"
+  GITLAB_QA_VERSION: "8.4.0"
+
+.ruby-qa-image:
+  image: ${CI_REGISTRY}/gitlab-org/gitlab-build-images/debian-bullseye-ruby-${RUBY_VERSION}:bundler-2.3-docker-${DOCKER_VERSION}
+
+.gitlab-qa-image:
+  image:
+    name: registry.gitlab.com/gitlab-org/gitlab/gitlab-ee-qa:master
+    entrypoint: [""]
+  before_script:
+    - cd /home/gitlab/qa
+    - '[[ ! -f "Gemfile.lock" ]] || bundle config set --local frozen "true"'
+
+.bundle-prefix:
+  - export BUNDLE_PREFIX=$([ "$RUN_WITH_BUNDLE" != "true" ] || echo "bundle exec")
+
+# gitlab-qa installation script
+#
+# if RUN_WITH_BUNDLE variable is set to true, install gitlab-qa via bundle and run all commands via bundle exec,
+#   optionally QA_PATH can be set if Gemfile with gitlab-qa is not located in current dir
+# if RUN_WITH_BUNDLE is not set, install gitlab-qa as a global gem
+#
+# TODO: remove gitlab-qa install from branch once cross project pipeline triggering is removed
+.gitlab-qa-install:
+  extends:
+    - .ruby-qa-image
+  variables:
+    GEM_HOME: ${CI_PROJECT_DIR}/.gems
+    GEM_DIR: ${CI_PROJECT_DIR}/.gems
+  before_script:
+    - !reference [.bundle-prefix]
+    - |
+      if [ "$RUN_WITH_BUNDLE" == "true" ]; then
+        cd ${QA_PATH:-.} && bundle install
+      else
+        export PATH=${PATH}:${GEM_HOME}/bin
+        if [ -z $QA_BRANCH ]; then
+          gem install gitlab-qa --conservative --no-document ${GITLAB_QA_VERSION:+ --version ${GITLAB_QA_VERSION}}
+        else
+          echo "Using $QA_BRANCH gitlab-qa branch to build the gem"
+          git clone --single-branch --branch $QA_BRANCH https://gitlab.com/gitlab-org/gitlab-qa.git
+          cd gitlab-qa
+          gem build gitlab-qa.gemspec -o gitlab-qa.gem && \
+          gem install gitlab-qa.gem --no-document
+          cd ..
+          rm -rf gitlab-qa
+        fi
+      fi
+cache:
+    key: gitlab-qa-${GITLAB_QA_VERSION}
+    paths:
+      - .gems
+    policy: pull
+
+.gitlab-qa-report:
+  after_script:
+    - !reference [.bundle-prefix]
+    - echo -e "\e[0Ksection_start:`date +%s`:report_results_section[collapsed=true]\r\e[0KReport results"
+    - export GITLAB_QA_ACCESS_TOKEN=$GITLAB_QA_PRODUCTION_ACCESS_TOKEN
+    - |
+      if [ "$RUN_WITH_BUNDLE" == "true" ]; then
+        cd ${QA_PATH:-.}
+      fi
+- |
+      if [ "$SKIP_REPORT_IN_ISSUES" != "true" ]; then
+        eval "$BUNDLE_PREFIX gitlab-qa-report --report-results \"$QA_ARTIFACTS_DIR/gitlab-qa-run-*/**/rspec-*.json\" --test-case-project ${QA_TESTCASES_REPORTING_PROJECT:-gitlab-org/gitlab} --results-issue-project ${QA_TEST_RESULTS_ISSUES_PROJECT:-gitlab-org/quality/testcases}" || true
+        eval "$BUNDLE_PREFIX gitlab-qa-report --relate-failure-issue \"$QA_ARTIFACTS_DIR/gitlab-qa-run-*/**/rspec-*.json\" --project ${QA_TESTCASES_REPORTING_PROJECT:-gitlab-org/gitlab} --max-diff-ratio '0.15'" || true
+      else
+        echo "Skipping result reporting due to SKIP_REPORT_IN_ISSUES set to 'true'"
+      fi
+    - echo -e "\e[0Ksection_end:`date +%s`:report_results_section\r\e[0K"
+
+.qa-base:
+  extends:
+    - .gitlab-qa-install
+  services:
+    - docker:${DOCKER_VERSION}-dind
+  stage: qa
+  tags:
+    - docker
+  artifacts:
+    when: always
+    expire_in: 30d
+    paths:
+      - gitlab-qa-run-*
+    reports:
+      junit: gitlab-qa-run-*/**/rspec-*.xml
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    QA_ARTIFACTS_DIR: $CI_PROJECT_DIR
+    COLORIZED_LOGS: "true"
+    FILE_SAFE_JOB_NAME: $(echo $CI_JOB_NAME | sed 's/[ /]/_/g')
+    RSPEC_REPORT_OPTS: "--format QA::Support::JsonFormatter --out tmp/rspec-${CI_JOB_ID}.json --format RspecJunitFormatter --out tmp/rspec-${CI_JOB_ID}.xml --format html --out tmp/rspec-${FILE_SAFE_JOB_NAME}.htm --color --format documentation"
+  retry:
+    max: 2
+    when: runner_system_failure
+  script:
+    - export QA_COMMAND="$BUNDLE_PREFIX gitlab-qa ${QA_SCENARIO:=Test::Instance::Image} $RELEASE $GITLAB_QA_OPTS -- $QA_TESTS $QA_RSPEC_TAGS $RSPEC_REPORT_OPTS"
+    - echo "Running - '$QA_COMMAND'"
+    - eval "$QA_COMMAND"
+  after_script:
+    - export PATH=${PATH}:${GEM_HOME}/bin
+    - !reference [.gitlab-qa-report, after_script]
+
+.notify-slack-qa:
+  extends:
+    - .gitlab-qa-install
+  stage: notification
+  script:
+    - |
+      NL=$'\n'
+
+      # Set notification channel based on the run
+      if [[ $CI_PROJECT_NAME == "canary" ]]; then
+        export SLACK_QA_CHANNEL="qa-production"
+      elif [[ $CI_PROJECT_NAME == "staging-canary" ]]; then
+        export SLACK_QA_CHANNEL="qa-staging"
+      elif [[ $CI_PROJECT_NAME == "gitlab" ]]; then
+        export SLACK_QA_CHANNEL="qa-master"
+      else
+        export SLACK_QA_CHANNEL="qa-${CI_PROJECT_NAME}"
+      fi
+
+      # Add feature toggle text if a feature toggle run
+      if [ -n "$feature_toggled" ] && [ -n "$chat_user_id" ]; then
+        FF_AND_USER_TEXT="${NL}This pipeline was triggered due to toggling of \\\`$feature_toggled\\\` feature flag by \\\`<@$chat_user_id>\\\`"
+      fi
+
+      # Add report issue url if present
+      if [ -f "REPORT_ISSUE_URL" ]; then
+        SESSION_REPORT="${NL}<$(cat REPORT_ISSUE_URL)|Test Session Issue Link>"
+      fi
+
+      ALLURE_REPORT_URL="https://storage.googleapis.com/gitlab-qa-allure-reports/${ALLURE_JOB_NAME:=$CI_JOB_NAME}/${CI_COMMIT_REF_SLUG}/${CI_PIPELINE_ID}/index.html"
+      MSG="$STATUS_SYM ${TYPE}*$CI_PROJECT_NAME end-to-end tests $STATUS! $STATUS_SYM*\
+        ${FF_AND_USER_TEXT}\
+        ${SESSION_REPORT}\
+        ${NL}<${CI_PIPELINE_URL}|Pipeline Link>\
+        ${NL}<${ALLURE_REPORT_URL}|Allure Report Link>"
+
+      echo "Sending slack notification to channel '${SLACK_QA_CHANNEL}'"
+      echo "====${NL}${MSG}${NL}====${NL}"
+      if [ $STATUS == "passed" ]; then
+        eval "$BUNDLE_PREFIX gitlab-qa-report --post-to-slack \"$MSG\""
+      else
+        eval "$BUNDLE_PREFIX gitlab-qa-report --post-to-slack \"$MSG\" --include-summary-table './*.xml'"
+      fi

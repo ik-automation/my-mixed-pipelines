@@ -1,0 +1,20 @@
+# source:
+# - https://github.com/search?o=desc&q=release-drafter+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/release-drafter/release-drafter
+# - https://github.com/release-drafter/release-drafter/blob/master/.github/workflows/draft.yml
+# tags: ['github action', 'release-drafter', 'rebase']
+
+name: Release Drafter
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

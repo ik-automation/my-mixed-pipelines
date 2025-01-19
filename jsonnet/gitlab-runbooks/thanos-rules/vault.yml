@@ -1,0 +1,61 @@
+# See https://www.vaultproject.io/docs/internals/telemetry for more details about Vault metrics
+
+groups:
+- name: vault.rules
+  partial_response_strategy: warn
+  rules:
+  - alert: NoActiveVaultInstance
+    expr: |
+      (
+        absent(vault_core_active{env="ops"})
+        or
+        absent(vault_core_active{env="pre"})
+      )
+      or sum by (env) (vault_core_active) == 0
+    for: 5m
+    labels:
+      severity: s2
+      pager: pagerduty
+      alert_type: symptom
+    annotations:
+      title: No active Vault node
+      description: >
+        Vault has no active node. This could mean that the pods are failing to
+        start, or Vault is unable to unseal or the Vault cluster lost quorum.
+      runbook: docs/vault/troubleshooting.md
+
+  - alert: VaultSealed
+    expr: |
+      (
+        absent(vault_core_unsealed{env="ops"})
+        or
+        absent(vault_core_unsealed{env="pre"})
+      )
+      or sum by (env) (vault_core_unsealed) == 0
+    for: 5m
+    labels:
+      severity: s2
+      pager: pagerduty
+      alert_type: symptom
+    annotations:
+      title: All Vault nodes sealed
+      description: >
+        All Vault nodes are sealed. This could mean that the pods are failing to
+        start, or Vault is unable to unseal or the Vault cluster lost quorum.
+      runbook: docs/vault/troubleshooting.md
+
+  - alert: VaultLowFailureTolerance
+    expr: |
+      vault_autopilot_failure_tolerance{env="ops"} < 2
+      or
+      vault_autopilot_failure_tolerance{env="pre"} < 2
+    for: 5m
+    labels:
+      severity: s3
+      alert_type: symptom
+    annotations:
+      title: Low failure tolerance for Vault cluster
+      description: >
+        The Vault cluster failure tolerance is diminished. It can only lose
+        {{ $value }} more nodes while maintaining quorum.
+      runbook: docs/vault/troubleshooting.md

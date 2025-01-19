@@ -1,0 +1,8 @@
+# https://jit.shops.com/browse/RE-861
+include:
+  - project: pub/ci
+    ref: '{{CI_COMMIT_REF_NAME}}'
+    file: .common.gitlab-ci.yml
+  - project: pub/ci
+    ref: '{{CI_COMMIT_REF_NAME}}'
+    file: .qa.gitlab-ci.yml

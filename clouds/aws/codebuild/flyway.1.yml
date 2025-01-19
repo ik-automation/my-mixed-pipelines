@@ -1,0 +1,22 @@
+---
+source: https://www.red-gate.com/blog/building-an-aws-devops-pipeline-for-databases
+tags: ['docker', 'codebuild', 'flyway']
+---
+
+version: 0.2
+
+
+phases:
+build:
+commands:
+
+#- docker run --rm -v $(pwd)/SQL:/flyway/SQL -v $(pwd)/conf:/flyway/conf flyway/flyway -enterprise clean
+#- docker run --rm -v $(pwd)/SQL:/flyway/SQL -v $(pwd)/conf:/flyway/conf flyway/flyway -enterprise validate
+- docker run --rm -v $(pwd)/SQL:/flyway/SQL -v $(pwd)/conf:/flyway/conf flyway/flyway -enterprise migrate
+
+---
+version: 0.2
+phases:
+  build:
+    commands:
+      - docker run --rm -v $(pwd)/sql:/flyway/sql -v $(pwd)/conf:/flyway/conf flyway/flyway -enterprise migrate

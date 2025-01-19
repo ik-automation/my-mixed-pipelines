@@ -1,0 +1,27 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/.gitlab/ci/kas.images.yml
+# Used by GitLab/KAS integration tests
+.kas:
+  extends:
+    - .build_dynamic_image
+  rules:
+    - !reference [.build_dynamic_image, rules]
+    - changes:
+        - "scripts/lib/custom-docker-build"
+        - ".gitlab/ci/kas.images.yml"
+
+gitlab-kas:
+  extends:
+    - .kas
+  variables:
+    GOLANG: '1.19'
+    RUST: '1.65'
+    LFS: '2.9'
+    CHROME: '111'
+    NODE: '14.15'
+    YARN: '1.22'
+    GRAPHICSMAGICK: '1.3.36'
+    GIT: '2.36'
+    POSTGRESQL: '12'
+  parallel:
+    matrix:
+      - RUBY: ['2.7.2.patched', '2.7.patched', '3.0.patched']

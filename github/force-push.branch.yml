@@ -1,0 +1,31 @@
+# force pushesh files to branch
+name: force-push-to-branch
+
+on:
+  workflow_dispatch:
+
+
+
+jobs:
+  test-id:
+    runs-on: ubuntu-latest
+    name: Generate changelog for main branch
+
+    steps:
+    # To use this repository's private action, you must check out the repository
+    - name: Checkout
+      uses: actions/checkout@v2.3.4
+
+    - name: plugin-version-change
+      uses: DamianReeves/write-file-action@master
+      with:
+        path: version
+        contents: 0.0.4
+        write-mode: overwrite
+
+    - name: commit-changes
+      uses: EndBug/add-and-commit@v7
+      with:
+        message: 'chore: update version [skip ci]'
+        add: 'version'
+        branch: main

@@ -1,0 +1,73 @@
+---
+source: https://github.com/dlavrenuek/conventional-changelog-action/blob/master/.github/workflows/draft-release.yml
+tags: ['github action', 'draft release', 'custom', 'changelog']
+---
+
+name: Create a draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Or enter a commit to use (HEAD of the selected branch if empty)'
+        required: false
+        default: ''
+
+jobs:
+  create_draft_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set commitish
+        id: set-commitish
+        run: |-
+          if [[ -z "${{ github.event.inputs.commit }}" ]]; then
+            # no commit is entered
+            echo "::set-output name=commitish::$GITHUB_SHA";
+          else
+            echo "::set-output name=commitish::${{ github.event.inputs.commit }}";
+          fi
+      - name: Determinate latest released tag
+        id: current-tag
+        run: |-
+          branch=${GITHUB_REF#refs/heads/}
+          tag=$( git tag -l --merged "$branch" "v*.*.*" --sort=-committerdate | head -n 1 );
+          echo "::set-output name=tag::$tag";
+      - name: Generate changelog
+        uses: ./
+        id: changelog
+        with:
+          from: ${{ steps.current-tag.outputs.tag }}
+          to: ${{ steps.set-commitish.outputs.commitish }}
+
+      - name: Parse current tag
+        id: semver
+        uses: WyriHaximus/github-action-next-semvers@v1
+        with:
+          version: ${{ steps.current-tag.outputs.tag }}
+
+      - name: Get next version
+        id: next-tag
+        run: |-
+          if [ "${{ steps.changelog.outputs.bump }}" == "major" ]; then
+            echo "::set-output name=tag::${{ steps.semver.outputs.v_major }}";
+          elif [ "${{ steps.changelog.outputs.bump }}" == "minor" ]; then
+            echo "::set-output name=tag::${{ steps.semver.outputs.v_minor }}";
+          else
+            echo "::set-output name=tag::${{ steps.semver.outputs.v_patch }}";
+          fi
+      - name: Create a release
+        uses: octokit/request-action@v2.x
+        with:
+          ro ute: POST /repos/${{ github.repository }}/releases
+          draft: true
+          name: ${{ steps.next-tag.outputs.tag }}
+          tag_name: ${{ steps.next-tag.outputs.tag }}
+          target_commitish: ${{ steps.set-commitish.outputs.commitish }}
+          body: ${{ toJSON(steps.changelog.outputs.body) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,57 @@
+// https://nttdata-dach.github.io/posts/mjm-renovateautomaticpullrequest/
+{
+  "$schema": "https://docs.renovatebot.com/Renovate-schema.json",
+  "extends": [
+    ":disableDependencyDashboard", // do not create dashboard issue as no deployment can react to anything there
+    ":rebaseStalePrs" // auto-rebase branches
+  ],
+  "enabledManagers": [ // remove all other managers, esp. gh actions
+    "regex"
+  ],
+  "regexManagers": [ // use regex instead of arcocd manager because it is not capable of our monorepo approach
+    {
+      "fileMatch": [
+        "apps/.*\\.ya?ml$"
+      ],
+      "datasourceTemplate": "git-tags",
+      "matchStringsStrategy": "combination",
+      "matchStrings": [
+        "apiVersion: [\"]?argoproj.io[\"]?", // must match only argo app files
+        "kind: [\"]?Application[\"]?",
+        "repoURL: [\"]?(?<packageName>[^\"\\s]+)[\"]?\\n", // repo url as 'packageName' -> cannot use {{ .Values.xxx }} here!
+        "targetRevision: [\"]?(?<currentValue>[^\"\\s]+)[\"]?\\n", // full target rev as 'currentValue' which is then handled by 'versioningTemplate'
+        "metadata:\\s*\\n\\s{2}name:\\s+[\"]?(?<depName>[^\"\\s]+)[\"]?\\n" // read dependency name from metadata.name to distinguish xxx-crd which uses xxx/v0.0.0 tag
+      ],
+    }
+  ],
+  "versioning": "regex:^(?<compatibility>.*)/v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)?$",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "feat",
+  "semanticCommitScope": "{{{depName}}}",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "to",
+  "commitMessageExtra": "{{{newVersion}}}",
+  "branchPrefix": "dependency/",
+  "branchTopic": "{{{depNameSanitized}}}", // remove version number from branch name
+  "addLabels": [
+    "dependencies",
+    "needs triage"
+  ],
+  "username": "bot",
+  "gitAuthor": "bot <bot@users.noreply.github.com>",
+  "onboarding": false,
+  "requireConfig": "ignored", // no need for config in the app repos, we have everything here
+  "platform": "github",
+  "repositories": [
+    "org/k8s-A-dev"
+  ],
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}", // remove default changelog (not monorepo-aware) and footer (Renovate advertisement)
+  "prBodyNotes": [
+    "**Release notes**: {{{packageName}}}/releases/tag/{{{encodeURIComponent newVersion}}}", // produces link to release in correct repo!
+    "**Remember**: This PR is a simple update of the version and does not cover any, **probably required**, configuration changes! You can use this PR to add those changes if needed."
+  ],
+  "gitUrl": "endpoint",
+  "endpoint": "https://github.company.com/api/v3/",
+  // "dryRun": "full",
+  // "baseBranches": ["feat/renovate"],
+}

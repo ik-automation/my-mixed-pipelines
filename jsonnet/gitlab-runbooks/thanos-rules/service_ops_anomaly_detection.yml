@@ -1,0 +1,56 @@
+groups:
+#
+# Anomaly Detection recording rules for operation-rate
+#
+- name: GitLab Service Operations-per-Second Rate Stats
+  partial_response_strategy: "warn"
+  interval: 5m
+  rules:
+  # Average values for each service, over a week
+  # TODO: switch from using `gitlab_service_ops:rate` to `gitlab_service_ops:rate_5m`
+  - record: gitlab_service_ops:rate:avg_over_time_1w
+    expr: >
+      avg_over_time(gitlab_service_ops:rate{monitor="global"}[1w])
+      unless on(tier, type)
+      gitlab_service:mapping:disable_ops_rate_prediction{monitor="global"}
+
+  # Stddev for each service, over a week
+  # TODO: switch from using `gitlab_service_ops:rate` to `gitlab_service_ops:rate_5m`
+  - record: gitlab_service_ops:rate:stddev_over_time_1w
+    expr: >
+      stddev_over_time(gitlab_service_ops:rate{monitor="global"}[1w])
+      unless on(tier, type)
+      gitlab_service:mapping:disable_ops_rate_prediction{monitor="global"}
+
+- name: GitLab Service Ops Rate Weekly Periodic Values
+  partial_response_strategy: "warn"
+  interval: 5m
+  rules:
+  # Predict what the value should be using the median value for a
+  # four hour period, for the past 3 weeks include week-on-week growth...
+  # TODO: switch from using `avg_over_time(gitlab_service_ops:rate{monitor="global"}[4h])` to `gitlab_service_ops:rate_6h`
+  - record: gitlab_service_ops:rate:prediction
+    expr: >
+      quantile(0.5,
+        label_replace(
+          avg_over_time(
+            gitlab_service_ops:rate{monitor="global"}[4h] offset 166h # 1 week - 2 hours
+          )
+          + gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} - gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} offset 1w
+          , "p", "1w", "", "")
+        or
+        label_replace(
+          avg_over_time(
+            gitlab_service_ops:rate{monitor="global"}[4h] offset 334h # 2 weeks - 2 hours
+          )
+          + gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} - gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} offset 2w
+          , "p", "2w", "", "")
+        or
+        label_replace(
+          avg_over_time(
+            gitlab_service_ops:rate{monitor="global"}[4h] offset 502h # 3 weeks - 2 hours
+          )
+          + gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} - gitlab_service_ops:rate:avg_over_time_1w{monitor="global"} offset 3w
+          , "p", "3w", "", "")
+      )
+      without (p)

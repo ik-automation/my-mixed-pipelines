@@ -1,0 +1,24 @@
+---
+source:
+- https://github.com/DeFiCh/ain/blob/master/.github/workflows/prune-artifacts.yaml
+- https://github.com/c-hive/gha-remove-artifacts
+tags: ['github action', 'artifacts', 'prune']
+---
+
+on:
+  schedule:
+    # Every day at 1am
+    - cron: '0 1 * * *'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-18.04
+    timeout-minutes: 10
+
+    steps:
+    - name: Prune artifacts
+      uses: c-hive/gha-remove-artifacts@v1
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        age: '4 weeks'
+        skip-tags: true

@@ -1,0 +1,46 @@
+build_vars:
+  stage: .pre
+  script:
+    - |
+      if [ "$CI_PIPELINE_TRIGGERED" = "true" ]; then
+        DIR_TO_BE_TESTED=$(ls -d */)
+      else
+        DIR_TO_BE_TESTED=$(git diff --name-only $CI_COMMIT_SHA^ $CI_COMMIT_SHA */ | cut -d'/' -f1 | sort | uniq)
+        if [ -z $DIR_TO_BE_TESTED ]; then
+          DIR_TO_BE_TESTED=$(ls -d */)
+        fi
+      fi
+    - echo DIR_TO_BE_TESTED=$DIR_TO_BE_TESTED >> build.env
+    - cat build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+generate_trigger_gitlab-ci:
+  stage: build
+  image:
+    name: bitnami/jsonnet:latest
+    entrypoint: [""]
+  script:
+    - DIR_SPLIT=$(echo $DIR_TO_BE_TESTED | tr " " "\n")
+    - LANG_PROJECT=$(echo $CI_PROJECT_NAME | sed -En 's/exercism-(.*)-sol/\1/pg')
+    - jsonnet -m . --ext-str exercism_projects="$DIR_SPLIT" --ext-str lang="$LANG_PROJECT" ".generate-config.jsonnet"
+  dependencies:
+    - build_vars
+  artifacts:
+    paths:
+      - .generated-config.yml
+
+trigger-tests:
+  stage: test
+  needs:
+    - generate_trigger_gitlab-ci
+    - job: build_vars
+      artifacts: true
+  trigger:
+    include:
+      - artifact: .generated-config.yml
+        job: generate_trigger_gitlab-ci
+    strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: $CI_PIPELINE_ID

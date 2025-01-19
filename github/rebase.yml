@@ -1,0 +1,32 @@
+# source:
+# - https://github.com/search?o=desc&q=release-drafter+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/release-drafter/release-drafter/blob/master/.github/workflows/rebase.yml
+# tags: ['github action', 'release-drafter', 'rebase']
+
+on:
+  issue_comment:
+    types:
+      - created
+
+name: Automatic Rebase
+jobs:
+  rebase:
+    name: Rebase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: khan/pull-request-comment-trigger@master
+        id: check
+        with:
+          trigger: '/rebase'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+      - uses: actions/checkout@v2
+        if: steps.check.outputs.triggered == 'true'
+        with:
+          fetch-depth: 0
+      - name: Automatic Rebase
+        uses: cirrus-actions/rebase@1.4
+        if: steps.check.outputs.triggered == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

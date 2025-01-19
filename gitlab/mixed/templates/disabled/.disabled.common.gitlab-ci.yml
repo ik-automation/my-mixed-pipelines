@@ -1,0 +1,128 @@
+include:
+  - local: ".common.gitlab-ci.yml"
+
+.check alerts:
+  rules:
+    - when: never
+.merge master:
+  only: [external]
+.create release:
+  only: [external]
+.helm check:
+  only: [external]
+.validate config:
+  only: [external]
+.warning:
+  only: [external]
+.error:
+  only: [external]
+.create image:
+  only: [external]
+.release image:
+  only: [external]
+.merge to active releases:
+  only: [external]
+.migrate:stg dryrun:
+  rules:
+    - when: never
+.migrate:stg:
+  rules:
+    - when: never
+.migrate:dev dryrun:
+  rules:
+    - when: never
+.migrate:dev:
+  rules:
+    - when: never
+.:prod dryrun:
+  rules:
+    - when: never
+.migrate:prod:
+  rules:
+    - when: never
+.staging:
+  only: [external]
+.development:
+  only: [external]
+.infra-dev:deploy:
+  rules:
+    - when: never
+.infra-dev:delete:
+  only: [external]
+.infra-stg:deploy:
+  rules:
+    - when: never
+.infra-stg:delete:
+  only: [external]
+.staging latest:
+  only: [external]
+.production:
+  only: [external]
+.staging cron:
+  only: [external]
+.development cron:
+  only: [external]
+.production cron:
+  only: [external]
+.security scan:
+  only: [external]
+.start job development:
+  only: [external]
+.start job staging:
+  only: [external]
+.start job production:
+  only: [external]
+.development switch:
+  only: [external]
+.staging switch:
+  only:
+    refs: [external]
+.staging latest switch:
+  only:
+    refs: [external]
+.switch lock:
+  only: [external]
+.switch unlock:
+  only: [external]
+.ready to prod:
+  only: [external]
+.close release:
+  only: [external]
+.delete merged branches:
+  only: [external]
+.clean development:
+  only: [external]
+.dev clean cron:
+  only: [external]
+.dev clean single:
+  only: [external]
+.def route dev clean:
+  only: [external]
+.staging clean:
+  only: [external]
+.staging clean latest:
+  only: [external]
+.staging clean cron:
+  only: [external]
+.def route stg clean:
+  only: [external]
+.staging clean single:
+  only: [external]
+.production clean:
+  only: [external]
+.production clean cron:
+  only: [external]
+.registry clean:
+  only: [external]
+.create mr:
+  only: [external]
+.staging dev:
+  only: [external]
+.staging m:
+  only: [external]
+.tmp deploy:
+  only: [external]
+.clear old ns:
+  only: [external]
+.delete tmp:
+  only: [external]

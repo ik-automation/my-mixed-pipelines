@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchCategories": [
+        "js",
+        "node"
+      ], // DO NOT EDIT: Limits this file's configurations to JavaScript code.
+      "groupName": "javascript-nonmajor",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+    },
+    {
+      "matchCategories": [
+        "js",
+        "node"
+      ], // DO NOT EDIT: Limits this file's configurations to JavaScript code.
+      "groupName": "javascript-dev",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "separateMajorMinor": false,
+    },
+  ]
+}

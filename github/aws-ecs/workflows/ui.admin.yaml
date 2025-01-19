@@ -1,0 +1,124 @@
+name: ui.admin
+# description: "'Admin' ui"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+          - "prod"
+      branch:
+        description: "Choose the branch from which to build."
+        required: false
+        default: develop
+      debug:
+        description: "Debug logging on or off."
+        required: true
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: 14.x
+  SOURCE_REPO: company/video-platform
+  SOURCE_DIRECTORY: source/company.FrontEnd/admin
+  SOURCE_REPO_PATH: source
+  # defaults
+  DEFAULT_ENV: dev
+  DEFAULT_BRANCH: develop
+  ARTIFACT_RETENTION_DAYS: 1
+  PROJECT: singleton
+  # should be in inputs
+  # TODO: understand what to do with them
+  MAX_WARNINGS: 100
+  SERVICE_NAME: admin-ui
+  AWS_DEFAULT_REGION: us-west-2
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: checkout-source-repository
+        # https://github.com/actions/checkout
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: "5"
+          path: ${{ env.SOURCE_REPO_PATH }}
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          debug: ${{ github.event.inputs.debug || false }}
+
+      - name: bootstrap-nodejs-${{ env.NODE_VERSION }}
+        id: bootstrap-node
+        uses: ./.github/actions/bootstrap-nodejs
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          source-directory: ${{ env.SOURCE_DIRECTORY }}
+
+      - name: bootstrap-aws
+        id: aws
+        uses: ./.github/actions/bootstrap-aws
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: bootstrap-and-build
+        run: |
+          ./scripts/admin.sh bootstrap
+          ./scripts/admin.sh build
+          ./scripts/admin.sh s3_sync
+        env:
+          WORKING_DIRECTORY: ${{ env.SOURCE_DIRECTORY }}
+          ENVIRONMENT: ${{ steps.info.outputs.env }}
+          SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+          SERVICE_NAME: ${{ steps.info.outputs.service_name }}
+          AWS_DEFAULT_REGION: ${{ steps.info.outputs.region }}
+          DEBUG_ENABLE: ${{ steps.info.outputs.debug }}
+          ADMIN_HOST_BUCKET: admin.${{ steps.info.outputs.env }}.${{ env.PROJECT }}.com
+
+      - name: send-slack
+        if: always()
+        uses: ./.github/actions/slack
+        with:
+          payload: |
+            {
+              "service": "${{ env.SERVICE_NAME }}",
+              "buildurl": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+              "rebuildurl": "https://github.com/${{github.repository}}/actions/workflows/${{github.workflow}}.yaml",
+              "status": "${{ job.status }}",
+              "env": "${{ steps.info.outputs.env }}",
+              "version": "${{ steps.info.outputs.service_version }}",
+              "actor": "${{ github.actor }}"
+            }
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: summary
+        if: ${{ always() }}
+        uses: ./.github/actions/summary
+        with:
+          env: ${{ steps.info.outputs.env }}
+          cluster: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-cluster
+          service-name: ${{ env.SERVICE_NAME }}
+          service-version: ${{ steps.info.outputs.service_version }}

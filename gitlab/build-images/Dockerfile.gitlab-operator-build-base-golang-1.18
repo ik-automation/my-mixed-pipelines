@@ -1,0 +1,110 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/Dockerfile.gitlab-operator-build-base-golang-1.18
+ARG GOLANG_VERSION=1.18
+ARG ALPINE_VERSION=3.15
+ARG OPM_ALPINE_VERSION=3.15
+
+## Opm
+
+FROM golang:${GOLANG_VERSION}-alpine${OPM_ALPINE_VERSION} as opm
+
+ARG OPM_VERSION=1.19.1
+ENV GOPROXY="https://proxy.golang.org/"
+
+RUN apk add --no-cache make gcc musl-dev curl git bash
+
+## on Alpine opm needs to be built from scratch due to glibc vs musl issues
+RUN mkdir -p /src \
+    && curl -s -L -o /src/operator-registry-${OPM_VERSION}.tgz https://github.com/operator-framework/operator-registry/archive/refs/tags/v${OPM_VERSION}.tar.gz \
+    && cd /src \
+    && tar -xzf operator-registry-${OPM_VERSION}.tgz \
+    && ln -s operator-registry-${OPM_VERSION} operator-registry \
+    && cd operator-registry \
+    && make bin/opm
+
+## Kustomize
+FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} as kustomize
+
+ARG KUSTOMIZE_VERSION=4.5.7
+ENV GOPROXY="https://proxy.golang.org/"
+
+RUN apk add --no-cache gcc musl-dev
+RUN go install sigs.k8s.io/kustomize/kustomize/v4@v${KUSTOMIZE_VERSION}
+
+## Controller-gen
+FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} as controller-gen
+
+ARG CONTROLLER_GEN_VERSION=0.7.0
+ENV GOPROXY="https://proxy.golang.org/"
+
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v${CONTROLLER_GEN_VERSION}
+
+## Build
+FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} as build
+
+LABEL maintainer="GitLab Distribution Team" \
+      description="Build base image for the GitLab Operator project."
+
+ARG KUBERNETES_VERSION=1.21.4
+ARG KUBEBUILDER_VERSION=3.2.0
+ARG YQ_VERSION=4.7.0
+ARG HELM_VERSION=3.5.2
+ARG OPERATORSDK_VERSION=1.14.0
+ARG TASK_VERSION=3.12.1
+# ARG OPM_VERSION=1.19.0
+
+RUN apk add --no-cache podman buildah curl make gcc musl-dev git bash coreutils
+
+# make VFS podman's default storage driver to
+# accomodate running podman within docker
+RUN sed -i 's#^driver.*$#driver = "vfs"#g' /etc/containers/storage.conf
+
+ARG GINKGO_V2_VERSION=2.7.1
+RUN go install github.com/onsi/ginkgo/v2/ginkgo@v${GINKGO_V2_VERSION} \
+    && ln -s "${GOPATH}/bin/ginkgo" "${GOPATH}/bin/ginkgo2"
+
+RUN go install golang.org/x/lint/golint@latest
+
+# Kubebuilder
+RUN mkdir -p /usr/local/kubebuilder/bin \
+    && curl --retry 6 -Ls -o /usr/local/kubebuilder/bin/kubebuilder \
+      https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${KUBEBUILDER_VERSION}/kubebuilder_linux_amd64 \
+    && curl --retry 6 -Ls "https://go.kubebuilder.io/test-tools/${KUBERNETES_VERSION}/linux/amd64" | tar -xz -C /usr/local/kubebuilder --strip-components=1 \
+    && chmod +x /usr/local/kubebuilder/bin/* \
+    && ln -sfv /usr/local/kubebuilder/bin/* /usr/local/bin
+
+# Yq
+RUN curl --retry 6 -LsO https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64 \
+    && chmod +x yq_linux_amd64 \
+    && mv yq_linux_amd64 /usr/local/bin/yq
+
+# Helm
+RUN curl --retry 6 -Ls "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C /tmp/ \
+    && chmod +x /tmp/linux-amd64/helm \
+    && mv /tmp/linux-amd64/helm /usr/local/bin/helm
+
+# Opm
+COPY --from=opm /src/operator-registry/bin/opm /usr/local/bin/opm
+
+# Operator-SDK
+RUN curl -o /usr/local/bin/operator-sdk_linux_amd64 -L \
+        https://github.com/operator-framework/operator-sdk/releases/download/v${OPERATORSDK_VERSION}/operator-sdk_linux_amd64 \
+    ; chmod +x /usr/local/bin/operator-sdk_linux_amd64 ; ln -s /usr/local/bin/operator-sdk_linux_amd64 /usr/local/bin/operator-sdk
+
+# Kustomize
+COPY --from=kustomize /go/bin/kustomize /usr/local/bin/kustomize
+# Controller-gen
+COPY --from=controller-gen /go/bin/controller-gen /usr/local/bin/controller-gen
+
+# Task
+RUN curl --retry 6 -Ls https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_amd64.tar.gz | tar -xz -C /tmp/ \
+    && chmod +x /tmp/task \
+    && mv /tmp/task /usr/local/bin/task
+
+# Clean up temporary installation files
+RUN rm -rf /tmp/*
+
+## Final image
+FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION}
+LABEL maintainer="GitLab Distribution Team" \
+      description="Build base image for the GitLab Operator project."
+COPY --from=build / /

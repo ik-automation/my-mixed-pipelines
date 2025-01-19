@@ -1,0 +1,32 @@
+{
+   "job/blue": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE blue",
+      "stage": "deploy"
+   },
+   "job/cats": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE cats",
+      "stage": "deploy"
+   },
+   "job/foxes": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE foxes",
+      "stage": "deploy"
+   },
+   "job/goats": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE goats",
+      "stage": "deploy"
+   },
+   "job/green": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE green",
+      "stage": "deploy"
+   },
+   "job/red": {
+      "image": "alpine:latest",
+      "script": "echo I LIKE red",
+      "stage": "deploy"
+   }
+}

@@ -1,0 +1,117 @@
+.staging cron:
+  extends: .staging_deploy
+  allow_failure: true
+  environment:
+    name: staging/${CI_COMMIT_REF_SLUG}-cron
+    on_stop: staging clean cron
+  script:
+    - run_ci
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    - tags
+  resource_group: staging-cron/$CI_COMMIT_REF_SLUG
+
+.development cron:
+  extends: .dev_deploy
+  allow_failure: true
+  variables:
+    K8S_ENVIRONMENT: dev
+  script:
+    - run_ci
+  environment:
+    name: development/${CI_COMMIT_REF_SLUG}-cron
+    on_stop: dev clean cron
+  only:
+    variables:
+      - $CRONJOB == "yes"
+  resource_group: development-cron/$CI_COMMIT_REF_SLUG
+
+.production cron:
+  extends: .k8s_deploy
+  allow_failure: true
+  variables:
+    IMAGE_RELEASE: "true"
+  tags:
+    - production
+    - deploy
+  script:
+    - run_ci
+  environment:
+    name: production-cron
+    on_stop: production clean cron
+  only:
+    refs:
+      - tags
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    - /^.*\/.*$/
+  when: manual
+  resource_group: production-cron
+
+# cron running
+
+.cron_run:
+  extends: .ci_function
+  stage: deploy
+  script:
+    - o3-re jobs start-job-cron
+  when: manual
+
+.cron_run_dev:
+  extends: .cron_run
+  tags: [development]
+  only:
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+
+.cron_run_stg:
+  extends: .cron_run
+  tags: [staging]
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    - tags
+
+
+.cron_run_prod:
+  extends: .cron_run
+  tags: [production]
+  only:
+    refs:
+      - tags
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    - /^.*\/.*$/
+
+.start job development:
+  extends: .cron_run_dev
+
+.start job staging:
+  extends: .cron_run_stg
+
+.start job production:
+  extends: .cron_run_prod

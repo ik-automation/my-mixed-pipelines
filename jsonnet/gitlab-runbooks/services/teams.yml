@@ -1,0 +1,328 @@
+teams:
+- name: sre_reliability
+  url: https://about.gitlab.com/handbook/engineering/infrastructure/team/reliability/#core-infra
+  slack_channel: production
+  engagement_policy:
+  oncall_schedule: https://gitlab.pagerduty.com/schedules#P22HQSG
+
+- name: create
+  url: https://about.gitlab.com/handbook/engineering/development/dev/create/
+  manager_slug: dsatcher
+  slack_channel: g_create
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+
+- name: distribution_deploy
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/distribution/
+  slack_channel: g_distribution
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+  product_stage_group: distribution_deploy
+  ignored_components:
+  - graphql_queries
+- name: geo
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/geo/
+  manager_slug: geo-mgr
+  slack_channel: g_geo
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+  product_stage_group: geo
+  ignored_components:
+  - graphql_queries
+
+- name: gitaly_cluster
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/gitaly/
+  slack_alerts_channel: gitaly-alerts
+  product_stage_group: gitaly_cluster
+  send_slo_alerts_to_team_slack_channel: true
+  ignored_components:
+  - graphql_queries
+
+- name: gitaly_git
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/gitaly/
+  slack_alerts_channel: gitaly-alerts
+  product_stage_group: gitaly_git
+  ignored_components:
+  - graphql_queries
+
+- name: manage
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/manage/
+  manager_slug: ruben-d
+  slack_channel: g_manage
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+
+- name: plan
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/manage/
+  manager_slug: ean-m
+  slack_channel: s_plan
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+
+- name: release
+  url: https://about.gitlab.com/handbook/engineering/dev-backend/
+  manager_slug: darby-frey
+  slack_channel: g_release
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+  product_stage_group: release
+  ignored_components:
+  - graphql_queries
+
+- name: release-management
+  url: https://about.gitlab.com/handbook/engineering/development/ci-cd/release/release-management/
+  manager_slug: sean_carrol
+  slack_channel: g_release_management
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+
+- name: support
+  url: https://about.gitlab.com/handbook/support/
+  slack_channel: support_gitlab-com
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule: https://gitlab.pagerduty.com/schedules#PIQ317K
+
+- name: package
+  url: https://about.gitlab.com/handbook/engineering/development/ops/package/
+  slack_channel: s_package
+  slack_alerts_channel: s_package_alerts
+  send_slo_alerts_to_team_slack_channel: true
+  engagement_policy:  # Link to doc that talks about engagement and escalation policy
+  oncall_schedule:    # Link to pagerduty oncall schedule
+  product_stage_group: package
+  ignored_components:
+  - graphql_queries
+
+- name: runner
+  product_stage_group: runner
+  slack_alerts_channel: alerts-ci-cd
+  ignored_components:
+  - graphql_queries
+
+# From https://gitlab.com/gitlab-com/gl-infra/scalability/-/issues/344
+- name: gitlab-pages
+  slack_alerts_channel: gitlab-pages
+
+- name: data-analytics
+  url: https://about.gitlab.com/handbook/business-ops/data-team/platform/
+  slack_channel: data-engineering
+  slack_alerts_channel: data-prom-alerts
+  oncall_schedule: https://about.gitlab.com/handbook/business-ops/data-team/how-we-work/duties/
+
+- name: delivery
+  slack_alerts_channel: g_delivery
+  product_stage_group: delivery
+  ignored_components:
+  - graphql_queries
+- name: scalability
+  slack_alerts_channel: g_scalability
+  product_stage_group: scalability
+  ignored_components:
+  - graphql_queries
+# Workhorse is a virtual team
+- name: workhorse
+  slack_alerts_channel: workhorse
+
+# Rapid Action Intercom
+- name: rapid-action-intercom
+  slack_alerts_channel: rapid-action-intercom
+
+- name: pipeline_validation
+  slack_alerts_channel: f_pipeline_validation_service
+  send_slo_alerts_to_team_slack_channel: true
+
+- name: anti_abuse
+  slack_alerts_channel: feed_pipeline_abuse_alerts
+  send_slo_alerts_to_team_slack_channel: true
+
+- name: subtransaction_troubleshooting
+  slack_alerts_channel: subtransaction_troubleshooting
+  send_slo_alerts_to_team_slack_channel: true
+
+- name: configure
+  product_stage_group: configure
+  slack_alerts_channel: feed_alerts_configure
+  send_slo_alerts_to_team_slack_channel: true
+  ignored_components:
+  - graphql_queries
+
+- name: authentication_and_authorization
+  slack_alerts_channel: feed_alerts_access
+  product_stage_group: authentication_and_authorization
+  send_slo_alerts_to_team_slack_channel: true
+  ignored_components:
+  - graphql_queries
+
+- name: global_search
+  slack_alerts_channel: g_global_search
+  product_stage_group: global_search
+  ignored_components:
+  - graphql_queries
+
+- name: 5-min-app
+  product_stage_group: 5-min-app
+  ignored_components:
+  - graphql_queries
+- name: activation
+  product_stage_group: activation
+  ignored_components:
+  - graphql_queries
+- name: applied_ml
+  product_stage_group: applied_ml
+  ignored_components:
+  - graphql_queries
+- name: certify
+  url: https://about.gitlab.com/handbook/engineering/development/dev/plan-product-planning-certify-be/
+  product_stage_group: certify
+  slack_channel: s_plan-be
+  slack_alerts_channel: s_plan-be
+  ignored_components:
+  - graphql_queries
+- name: code_review
+  product_stage_group: code_review
+  ignored_components:
+  - graphql_queries
+- name: compliance
+  product_stage_group: compliance
+  ignored_components:
+  - graphql_queries
+- name: composition_analysis
+  product_stage_group: composition_analysis
+  ignored_components:
+  - graphql_queries
+- name: acquisition
+  product_stage_group: acquisition
+  ignored_components:
+  - graphql_queries
+- name: database
+  product_stage_group: database
+  ignored_components:
+  - graphql_queries
+- name: dataops
+  product_stage_group: dataops
+  ignored_components:
+  - graphql_queries
+- name: dynamic_analysis
+  product_stage_group: dynamic_analysis
+  ignored_components:
+  - graphql_queries
+- name: editor
+  product_stage_group: editor
+  ignored_components:
+  - graphql_queries
+- name: foundations
+  product_stage_group: foundations
+  ignored_components:
+  - graphql_queries
+- name: dedicated
+  product_stage_group: dedicated
+  ignored_components:
+  - graphql_queries
+- name: import
+  product_stage_group: import
+  ignored_components:
+  - graphql_queries
+- name: integrations
+  product_stage_group: integrations
+  ignored_components:
+  - graphql_queries
+- name: provision
+  product_stage_group: provision
+  ignored_components:
+  - graphql_queries
+- name: application_performance
+  product_stage_group: application_performance
+  ignored_components:
+  - graphql_queries
+- name: mlops
+  product_stage_group: mlops
+  ignored_components:
+  - graphql_queries
+- name: moble_devops
+  product_stage_group: moble_devops
+  ignored_components:
+  - graphql_queries
+- name: respond
+  product_stage_group: respond
+  ignored_components:
+  - graphql_queries
+- name: observability
+  product_stage_group: observability
+  ignored_components:
+  - graphql_queries
+- name: optimize
+  product_stage_group: optimize
+  ignored_components:
+  - graphql_queries
+- name: pipeline_authoring
+  product_stage_group: pipeline_authoring
+  send_slo_alerts_to_team_slack_channel: true
+  slack_channel: g_pipeline-authoring_alerts
+  ignored_components:
+  - graphql_queries
+- name: pipeline_execution
+  product_stage_group: pipeline_execution
+  slack_channel: g_pipeline-execution
+  send_slo_alerts_to_team_slack_channel: true
+  ignored_components:
+  - graphql_queries
+- name: product_intelligence
+  product_stage_group: product_intelligence
+  ignored_components:
+  - graphql_queries
+- name: product_planning
+  product_stage_group: product_planning
+  ignored_components:
+  - graphql_queries
+- name: project_management
+  product_stage_group: project_management
+  ignored_components:
+  - graphql_queries
+- name: purchase
+  product_stage_group: purchase
+  ignored_components:
+  - graphql_queries
+- name: pods
+  product_stage_group: pods
+  ignored_components:
+  - graphql_queries
+- name: source_code
+  product_stage_group: source_code
+  ignored_components:
+  - graphql_queries
+- name: static_analysis
+  product_stage_group: static_analysis
+- name: pipeline_insights
+  product_stage_group: pipeline_insights
+  ignored_components:
+  - graphql_queries
+- name: threat_insights
+  product_stage_group: threat_insights
+  ignored_components:
+  - graphql_queries
+- name: billing_and_subscription_management
+  product_stage_group: billing_and_subscription_management
+  ignored_components:
+  - graphql_queries
+- name: commerce_integrations
+  product_stage_group: commerce_integrations
+  ignored_components:
+  - graphql_queries
+- name: utilization
+  product_stage_group: utilization
+  ignored_components:
+  - graphql_queries
+- name: vulnerability_research
+  product_stage_group: vulnerability_research
+  ignored_components:
+  - graphql_queries
+- name: workspace
+  product_stage_group: workspace
+  ignored_components:
+  - graphql_queries
+- name: fulfillment_platform
+  product_stage_group: fulfillment_platform
+  slack_alerts_channel: s_fulfillment_status
+  send_slo_alerts_to_team_slack_channel: true
+  ignored_components:
+  - graphql_queries

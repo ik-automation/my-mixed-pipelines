@@ -1,0 +1,17 @@
+---
+source: https://github.com/aws-samples/aws-codebuild-samples/blob/master/buildspecs/build-test-suite-1.yml
+tags: ['npm', 'codebuild']
+---
+
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - npm install
+  build:
+    commands:
+      - npm test -- --grep 'Calculator Tests'
+artifacts:
+  files:
+    - '**/*'

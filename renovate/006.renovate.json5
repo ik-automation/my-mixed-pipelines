@@ -1,0 +1,228 @@
+// https://codeberg.org/forgejo-contrib/forgejo-helm/src/branch/main/renovate.json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "forgejo-contrib/forgejo-renovate//base.json",
+    "forgejo-helm/forgejo-helm//.forgejo/renovate/k3s.json"
+  ],
+  "assignees": [
+    "viceice"
+  ],
+  "baseBranches": [
+    "main",
+    "/^maint\\/.+/"
+  ],
+  "packageRules": [
+    {
+      "description": "Separate multiple major sub chart updates",
+      "matchFileNames": [
+        "Chart.yaml"
+      ],
+      "separateMultipleMajor": true
+    },
+    {
+      "description": "Require approval for major sub chart updates for maintenance branches",
+      "matchBaseBranches": [
+        "/^maint\\/.+/"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "matchFileNames": [
+        "Chart.yaml"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchManagers": [
+        "helmv3"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "semanticCommitType": "fix"
+    },
+    {
+      "matchManagers": [
+        "helmv3"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "semanticCommitType": "feat"
+    },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "forgejo"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "semanticCommitType": "fix"
+    },
+    {
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "forgejo"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "semanticCommitType": "feat"
+    },
+    {
+      "description": "Automerge and group helm subchart updates weekly (minor & patch)",
+      "matchManagers": [
+        "helmv3"
+      ],
+      "matchFileNames": [
+        "Chart.yaml"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true,
+      "groupName": "subcharts",
+      "extends": [
+        "schedule:weekly"
+      ]
+    },
+    {
+      "description": "Automerge dev deps updates",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge node updates",
+      "matchManagers": [
+        "nodenv"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge some updates",
+      "matchDepNames": [
+        "pnpm",
+        "helm-unittest"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge digest updates",
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Use test scope for forgejo ci tests",
+      "matchFileNames": [
+        "ci/*.yaml"
+      ],
+      "additionalBranchPrefix": "ci-forgejo-",
+      "semanticCommitType": "ci",
+      "semanticCommitScope": "forgejo",
+      "groupName": "experimental docker digests",
+      "extends": [
+        "schedule:daily"
+      ]
+    },
+    {
+      "description": "Disable updates for forgejo ci tests",
+      "matchFileNames": [
+        "ci/*.yaml"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Don't pin digests for forgejo ci tests, not supported",
+      "matchFileNames": [
+        "ci/*.yaml"
+      ],
+      "pinDigests": false
+    },
+    {
+      "description": "branch automerge not possible",
+      "automergeType": "pr",
+      "matchPackageNames": [
+        "/.+/"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Update forgeo version in chart",
+      "customType": "regex",
+      "fileMatch": [
+        "^Chart\\.yaml$"
+      ],
+      "matchStrings": [
+        "appVersion: (?<currentValue>.+?)\\s"
+      ],
+      "depNameTemplate": "forgejo",
+      "packageNameTemplate": "code.forgejo.org/forgejo/forgejo",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Detect helm-unittest yaml schema file",
+      "customType": "regex",
+      "fileMatch": [
+        ".vscode/settings\\.json$"
+      ],
+      "matchStrings": [
+        "https://raw\\.githubusercontent\\.com/helm-unittest/helm-unittest/(?<currentValue>v[0-9.]+?)/schema/helm-testsuite\\.json"
+      ],
+      "depNameTemplate": "helm-unittest",
+      "packageNameTemplate": "helm-unittest/helm-unittest",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Update k3s kubernetes references",
+      "fileMatch": [
+        "^\\.forgejo/workflows/[^/]+\\.ya?ml$"
+      ],
+      "matchStrings": [
+        " +- (?<currentValue>.+?) # renovate: k3s\\n"
+      ],
+      "depNameTemplate": "k3s",
+      "packageNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "helm-values": {
+    "fileMatch": [
+      "^ci/.+\\.yaml$"
+    ]
+  }
+}

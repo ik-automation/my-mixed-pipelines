@@ -1,0 +1,17 @@
+# https: //github.com/terraform-providers/terraform-provider-aws/blob/master/renovate.json
+{
+	"extends": [
+		"config:base"
+	],
+	"gomodTidy": true,
+	"ignoreDeps": [
+		"golang.org/x/crypto",
+		"golang.org/x/net",
+		"golang.org/x/sys",
+		"google.golang.org/genproto"
+	],
+	"labels": [
+		"dependencies"
+	],
+	"prConcurrentLimit": 4
+}

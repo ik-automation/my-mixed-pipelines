@@ -1,0 +1,28 @@
+---
+source:
+-
+- https://github.com/marketplace/actions/multi-labeler
+tags: ['github action', 'issues', 'labeller']
+---
+
+
+name: labeller
+
+on:
+  pull_request:
+    types: [ opened, edited, synchronize, ready_for_review ]
+  pull_request_target:
+  workflow_dispatch:
+  # issues:
+  #   types: [ opened, edited ]
+  # issue_comment:
+  #   types: [ created, edited ]
+
+jobs:
+  labels-everything:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: fuxingloh/multi-labeler@v1
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}} # optional, default to '${{ github.token }}'
+          config-path: .github/labeler.yml # optional, default to '.github/labeler.yml'

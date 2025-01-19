@@ -1,0 +1,55 @@
+# https://github.com/aws-actions/amazon-ecs-deploy-task-definition/blob/master/index.js
+name: 'ecs-deploy'
+description: 'Registers an Amazon ECS task definition and deploys it to an ECS service. '
+
+inputs:
+  env:
+    description: 'Environment where to deploy service to.'
+    required: true
+  cluster:
+    description: 'Name of ECS cluster.'
+    required: true
+  service-version:
+    description: 'Service Version to deploy.'
+    required: false
+    default: source
+  service-name:
+    description: 'Name of service to deploy.'
+    required: true
+  image-repository:
+    description: 'Docker image repository.'
+    required: true
+  timeout:
+    description: 'Script monitors ECS Service for new task definition to be running.'
+    required: false
+    default: "180"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: echo "Executing '${{ github.action }}' action..."
+
+    - name: information
+      shell: bash
+      run: |
+        echo "ENVIRONMENT: ${{ inputs.env }}"
+        echo "CLUSTER: ${{ inputs.cluster }}"
+        echo "SERVICE VERSION: ${{ inputs.service-version }}"
+        echo "SERVICE NAME: ${{ inputs.service-name }}"
+
+    - name: deploy
+      shell: bash
+      run: |
+        ./scripts/ecs-deploy --cluster ${CLUSTER} \
+          --service-name ${SERVICE_NAME} \
+          --image ${IMAGE_REPOSITORY}:${SERVICE_VERSION} \
+          --enable-rollback \
+          --use-latest-task-def \
+          -t ${DEPLOY_TIMEOUT}
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        SERVICE_NAME: ${{ inputs.service-name }}
+        SERVICE_VERSION: ${{ inputs.service-version }}
+        IMAGE_REPOSITORY: ${{ inputs.image-repository }}
+        DEPLOY_TIMEOUT: ${{ inputs.timeout }}

@@ -1,0 +1,137 @@
+.staging tag:
+  extends: .staging_deploy
+  only:
+    refs:
+      - tags
+    variables:
+      - $DEPLOY_TAG == "staging"
+  script:
+    - check_resources
+    - deploy_config
+    - k8s_deploy "${SERVICE_NAME}-tag"
+    - clean_config
+  environment:
+    name: staging/tag
+    on_stop: staging tag clean
+  resource_group: staging/tag
+
+.staging switch tag:
+  extends: .ci_function
+  stage: post-deploy
+  script:
+    - k8s_default_svc "${SERVICE_NAME}"
+    - k8s_default_ver "${SERVICE_NAME}"
+  tags:
+    - staging
+    - switch
+  only:
+    refs:
+      - tags
+    variables:
+      - $DEPLOY_TAG == "staging"
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  environment:
+    name: default-staging
+  when: manual
+  resource_group: staging/tag
+
+.staging tag clean:
+  extends: .staging_clean
+  script:
+    - helm_delete_branch "${SERVICE_NAME}-tag"
+  only:
+    refs:
+      - tags
+    variables:
+      - $DEPLOY_TAG == "staging"
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  environment:
+    name: staging/tag
+    action: stop
+
+.migrate:stg tag dryrun:
+  extends: .migrate_stg
+  variables:
+    MIGRATION_INPUT_PARAMS: "--dryrun"
+    STAGE: "staging"
+    RELEASE_PATH: "/release"
+  allow_failure: false
+  rules:
+    - if: '$MIGRATION_FOLDER && $DEPLOY_TAG == "staging" && $CI_COMMIT_TAG'
+      when: on_success
+    - when: never
+
+.migrate:stg tag:
+  extends: .migrate_stg
+  variables:
+    STAGE: "staging"
+    RELEASE_PATH: "/release"
+  allow_failure: true
+  rules:
+    - if: '$MIGRATION_FOLDER && $DEPLOY_TAG == "staging" && $CI_COMMIT_TAG'
+      when: manual
+    - when: never
+  resource_group: staging-migration/tag
+
+.infra-stg tag:deploy:
+  stage: build
+  extends: .ci_function
+  allow_failure: true
+  script:
+    - k8s_deploy_infra "${SERVICE_NAME}-tag"
+  tags:
+    - staging
+    - deploy
+  only:
+    refs:
+      - tags
+    variables:
+      - $DEPLOY_TAG == "staging" && $INFRA_DEPLOY_STG == "yes"
+  environment:
+    name: staging-infra/tag
+    on_stop: infra-stg tag:delete
+  when: manual
+  resource_group: staging-infra/tag
+
+.infra-stg tag:delete:
+  stage: close
+  extends: .ci_function
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - k8s_delete_infra "${SERVICE_NAME}-tag"
+  tags:
+    - staging
+    - deploy
+  only:
+    refs:
+      - tags
+    variables:
+      - $DEPLOY_TAG == "staging" && $INFRA_DEPLOY_STG == "yes"
+  environment:
+    name: staging-infra/tag
+    action: stop
+  when: manual
+
+.deploy to staging:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: close
+  script:
+    - export DEPLOY_TAG=staging
+    - run_pipeline
+  only:
+    refs:
+      - tags
+  except:
+    variables:
+      - $DEPLOY_TAG
+  when: manual
+  resource_group: staging/tag

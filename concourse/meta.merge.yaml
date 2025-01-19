@@ -1,0 +1,62 @@
+---
+meta:
+  dockerhub:
+    account:  starkandwayne
+    email:    ((dockerhub-email))
+    username: ((dockerhub-username))
+    password: ((dockerhub-password))
+
+  gcr: # Google Container Registry
+    account: gcr.io/starkandwayne-registry
+    username: _json_key
+    password: ((gcr-service-account-key))
+
+  github:
+    key: ((github.private-key))
+    access_token: ((github.access-token))
+
+  git:
+    email: ci@starkandwayne.com
+    name:  CI Bot
+
+  resources:
+    dockerfiles:
+      type: git
+      source:
+        uri: git@github.com:starkandwayne/dockerfiles
+        branch: master
+        private_key: (( grab meta.github.key ))
+
+    gcr:
+      type: docker-image
+      source:
+        username: (( grab meta.gcr.username ))
+        password: (( grab meta.gcr.password ))
+
+    dockerhub:
+      type: docker-image
+      source:
+        email:    (( grab meta.dockerhub.email ))
+        username: (( grab meta.dockerhub.username ))
+        password: (( grab meta.dockerhub.password ))
+
+    github-release:
+      type: github-release
+      source:
+        access_token: (( grab meta.github.access_token ))
+
+    git:
+      type: git
+      source:
+        private_key: (( grab meta.github.key ))
+
+groups:
+  - name: '*'
+    jobs: (( grab groups.concourse.jobs groups.concourse-go.jobs groups.concourse-java.jobs groups.concourse-ruby.jobs groups.concourse-nodejs.jobs groups.concourse-kubernetes.jobs groups.gcp-cloudshell.jobs ))
+  - name: concourse
+  - name: concourse-go
+  - name: concourse-java
+  - name: concourse-ruby
+  - name: concourse-nodejs
+  - name: concourse-kubernetes
+  - name: gcp-cloudshell

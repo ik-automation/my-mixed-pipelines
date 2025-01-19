@@ -1,0 +1,64 @@
+---
+source: https://github.com/ariya/hello-react-native/blob/master/.github/workflows/android.yml
+tags: ['github action', 'react native', 'fastlane' , 'ios']
+---
+
+name: Dev Releases
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  LANG: en_US.UTF-8
+  # App runtime environment
+  API_URL: ${{ secrets.DEV_API_URL }}
+  # S3
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  KEYS_BUCKET: ${{ secrets.AWS_S3_KEYS_BUCKET }}
+  FOLDER: react-native-base
+  # iOS Release
+  APPLE_PROFILE: AppStore_comrootstraprnbasedevelop.mobileprovision
+  APPLE_CERT: distribution.cer
+  APPLE_KEY: Certificates.p12
+  APPLE_KEY_PASSWORD: ${{ secrets.APPLE_KEY_PASSWORD }}
+  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID}}
+  FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_TEAM_ITC_ID}}
+  FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+  FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+  FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+  # Notifications
+  SLACK_URL: ${{ secrets.SLACK_URL }}
+  SLACK_CHANNEL: '#dev-builds'
+
+jobs:
+  ios:
+    # Run on our self-hosted macs
+    runs-on: macmini
+    timeout-minutes: 45
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    # This needs to match Node version in package.json
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '14.5.0'
+    - name: install Node dependencies
+      run: yarn install
+    # Download certificate, private key and provisioning profile from S3
+    - name: Download code signing items
+      run: |
+        aws s3 cp s3://$KEYS_BUCKET/$FOLDER/ ./ios --recursive
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        mv ./ios/$APPLE_PROFILE ~/Library/MobileDevice/Provisioning\ Profiles/$APPLE_PROFILE
+    # Other environment specific variables should be included here
+    - name: Generate .env file
+      run: |
+        echo API_URL=$API_URL >> .env.dev
+    # Run Fastlane pipeline for Develop version
+    - name: Build with Fastlane
+      run: fastlane release_dev
+      working-directory: ios

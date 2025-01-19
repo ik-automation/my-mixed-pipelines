@@ -1,0 +1,60 @@
+# source:
+# - https://github.com/actions/cache
+# - https://github.com/pawroman/links/blob/master/.github/workflows/main.yml#L14-L27
+# tags: ['github action', 'cache', pip]
+
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 20 * * *" # every day at 20:00 UTC
+
+env:
+  USER_AGENT: "Mozilla/5.0 (X11; Linux x86_64; rv:84.0) Gecko/20100101 Firefox/84.0"
+
+jobs:
+  test-links-valid:
+    runs-on: ubuntu-latest
+    container:
+      image: lycheeverse/lychee:latest
+      env:
+        GITHUB_TOKEN: $LYCHEE_GITHUB_TOKEN
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Check external links using lychee
+        run: |
+          lychee --verbose --timeout 45 --user-agent="$USER_AGENT" README.md
+  test-links-sorted:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache dependencies
+        uses: actions/cache@v2
+        id: cache
+        env:
+          cache-name: cache-pip-poetry
+        with:
+          path: ~/.cache
+          key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.cache-name }}-
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: "3.8"
+
+      - name: CI setup
+        run: |
+          make ci_setup
+      - name: Install dependencies
+        run: |
+          make install
+        if: steps.cache.outputs.cache-hit != 'true'

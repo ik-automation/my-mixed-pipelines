@@ -1,0 +1,137 @@
+name: proxy
+# description: "'proxy' services to deploy"
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment (#dev, #stage or #prod)"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+      branch:
+        description: "Choose the branch from which to build"
+        required: false
+        default: main
+
+env:
+  SOURCE_REPO: company/ingress-proxy
+  SOURCE_REPO_PATH: source
+  # defaults
+  PROJECT: singleton
+  DEFAULT_ENV: dev
+  DEFAULT_BRANCH: main
+  SERVICE_NAME: ui-proxy
+  AWS_DEFAULT_REGION: us-west-2
+  ECR_REPOSITORY: public-proxy
+  ECS_SERVICE_NAME: proxy
+  DOCKERFILE: Dockerfile
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: checkout-source-repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          token: ${{ secrets.ACCESS_GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH }}
+          fetch-depth: "5"
+          path: ${{ env.SOURCE_REPO_PATH }}
+
+      - name: build-information
+        id: info
+        uses: ./.github/actions/info
+        with:
+          source_branch: ${{ env.DEFAULT_BRANCH  }}
+          env: ${{ github.event.inputs.env || env.DEFAULT_ENV }}
+          debug: false
+
+      - name: bootstrap-aws
+        id: aws
+        uses: ./.github/actions/bootstrap-aws
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: build-tag-push-to-ecr
+        id: build-image
+        env:
+          WORKING_DIRECTORY: ${{ env.SOURCE_REPO_PATH }}
+          IMAGE: "${{ steps.aws.outputs.registry }}/${{ env.ECR_REPOSITORY }}-${{ steps.info.outputs.env }}"
+          DOCKERFILE: ${{ env.DOCKERFILE }}
+          IMAGE_TAG: ${{ steps.info.outputs.service_version }}
+          CREATED: ${{ steps.info.outputs.timestamp }}
+          BUILD_URL: ${{ steps.info.outputs.build_url }}
+          SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+          SERVICE_NAME: ${{ steps.info.outputs.service_name }}
+          ENVIRONMENT: ${{ steps.info.outputs.env }}
+          TIMESTAMP: ${{ steps.info.outputs.TIMESTAMP }}
+          BRANCH: ${{ github.event.inputs.branch || env.DEFAULT_BRANCH }}
+        run: |
+
+          ./scripts/docker.sh build
+          ./scripts/docker.sh push
+
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH"
+          echo "::set-output name=image_latest::$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: deploy-aws-ecs
+        id: deploy-ecs
+        # if: steps.info.outputs.env == 'dev' || steps.info.outputs.env == 'stage'
+        uses: ./.github/actions/deploy-ecs
+        with:
+          env: ${{ steps.info.outputs.env }}
+          cluster: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-ecs
+          service-name: ${{ env.ECS_SERVICE_NAME }}-${{ steps.info.outputs.env }}-svc
+          service-version: ${{ steps.info.outputs.service_version }}
+          image-repository: "${{ steps.aws.outputs.registry }}/${{ env.ECR_REPOSITORY }}-${{ steps.info.outputs.env }}"
+
+      # - name: helm-deploy-${{ env.SERVICE_NAME }}
+      #   id: eks
+      #   run: |
+      #     ./scripts/k8s.sh bootstrap
+      #     ./scripts/k8s.sh helm_deploy
+
+      #     echo "****TEST****"
+      #     kubectl rollout status deployment/${SERVICE_NAME}
+      #   env:
+      #     WORKING_DIRECTORY: ${{ env.SOURCE_REPO_PATH }}
+      #     ENVIRONMENT: ${{ steps.info.outputs.env }}
+      #     REGION: ${{ env.AWS_DEFAULT_REGION }}
+      #     CLUSTER_NAME: ${{ env.PROJECT }}-${{ steps.info.outputs.env }}-cluster
+      #     SERVICE_NAME: ${{ env.SERVICE_NAME }}
+      #     SERVICE_VERSION: ${{ steps.info.outputs.service_version }}
+      #     TIMESTAMP: ${{ steps.info.outputs.TIMESTAMP }}
+
+      - name: send-slack
+        if: always()
+        uses: ./.github/actions/slack
+        with:
+          payload: |
+            {
+              "service": "info",
+              "buildurl": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+              "rebuildurl": "https://github.com/${{github.repository}}/actions/workflows/${{github.workflow}}.yaml",
+              "status": "${{ job.status }}",
+              "env": "dev",
+              "version": "0.0.1",
+              "actor": "https://github.com/${{ github.actor }}"
+            }
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

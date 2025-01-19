@@ -1,0 +1,68 @@
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+# https://github.blog/2022-05-09-supercharging-github-actions-with-job-summaries/
+name: 'summary'
+description: 'Output and group custom Markdown content on the Actions run summary page.'
+
+inputs:
+  env:
+    description: 'Environment where to deploy service to.'
+    required: true
+  cluster:
+    description: 'Name of ECS cluster.'
+    required: true
+  service-name:
+    description: 'Name of service to deploy.'
+    required: true
+  service-version:
+    description: 'Service Version to deploy.'
+    required: false
+    default: latest
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: echo "Executing '${{ github.action }}' action..."
+
+    - name: prepare
+      id: params
+      shell: bash
+      run: |
+        if [[ "success" =~ "${{ job.status }}" ]]; then
+          echo "::set-output name=status::✅"
+        else
+          echo "::set-output name=status::❌"
+        fi
+
+# https://github.com/actions/github-script#run-a-separate-file
+    - name: status
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const svc = JSON.parse(fs.readFileSync('values/svc.${{ inputs.env }}.json'));
+          const links = JSON.parse(fs.readFileSync('values/links.json'));
+
+          core.summary
+            .addHeading('Run Details :rocket:')
+            .addSeparator()
+            .addTable([
+              [{data: 'Parameter', header: true}, {data: 'Value', header: true}],
+              ['ENV', '${{ inputs.env }}'],
+              ['Cluster', '${{ inputs.cluster }}'],
+              ['Service', '${{ inputs.service-name }}'],
+              ['Version', '${{ inputs.service-version }}'],
+              ['Status', "${{ steps.params.outputs.status }}"],
+              ['Proxy', `<a href="${svc.proxy}" target="_blank">:arrow_right:</a>`],
+              ['API', `<a href="${svc.api}" target="_blank">:arrow_right:</a>`],
+              ['AUTH', `<a href="${svc.auth}" target="_blank">:arrow_right:</a>`],
+              ['UI', `<a href="${svc.ui}" target="_blank">:arrow_right:</a>`],
+              ['ADMIN', `<a href="${svc.admin}" target="_blank">:arrow_right:</a>`],
+            ]);
+            for (const [key, value] of Object.entries(links)) {
+              core.summary
+                .addLink(value.text, value.href)
+                .addBreak()
+            }
+
+          await core.summary.write();

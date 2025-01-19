@@ -1,0 +1,30 @@
+groups:
+- name: gcp-snapshots.rules
+  partial_response_strategy: warn
+  rules:
+  - alert: GCPScheduledSnapshotsDelayed
+    expr: |
+      (absent_over_time(stackdriver_gce_disk_logging_googleapis_com_user_scheduled_snapshots{env="gprd"}[4h]) == 1) or
+      (absent_over_time(stackdriver_gce_disk_logging_googleapis_com_user_scheduled_snapshots{env="gstg"}[4h]) == 1) or
+      (absent_over_time(stackdriver_gce_disk_logging_googleapis_com_user_scheduled_snapshots{env="ops"}[4h]) == 1)
+    for: 1h
+    labels:
+      pager: pagerduty
+      severity: s1
+      alert_type: cause
+    annotations:
+      description: Recent GCP scheduled snapshot are missing for {{ $labels.env }}. Please follow the runbook to review the problem.
+      runbook: docs/uncategorized/gcp-snapshots.md
+      title: GCP scheduled snapshots are delayed
+  - alert: GCPScheduledSnapshotsFailed
+    expr: |
+      count by (env) (stackdriver_gce_disk_logging_googleapis_com_user_scheduled_snapshots_errors) >= 1
+    for: 1m
+    labels:
+      pager: pagerduty
+      severity: s1
+      alert_type: cause
+    annotations:
+      description: GCP scheduled snapshots are reporting failures for {{ $labels.env }}. Please follow the runbook to review the problem.
+      runbook: docs/uncategorized/gcp-snapshots.md
+      title: GCP scheduled snapshots are failing

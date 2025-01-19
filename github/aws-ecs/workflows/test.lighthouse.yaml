@@ -1,0 +1,56 @@
+---
+name: test.lighthouse
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 2"
+
+env:
+  TEMPLATE: .github/templates/lighthouse.md
+
+jobs:
+  lighthouse-dev:
+    runs-on: ubuntu-latest
+    env:
+      URL: "https://www.dev.singleton.link"
+      ENV: dev
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: lighthouse-site-speed
+        uses: ./.github/actions/lighthouse
+        with:
+          env: ${{ env.ENV }}
+          urls: ${{ env.URL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  lighthouse-stage:
+    runs-on: ubuntu-latest
+    env:
+      URL: "https://www.stage.singleton.link"
+      ENV: stage
+    steps:
+      - uses: actions/checkout@v3
+      - name: lighthouse-site-speed
+        uses: ./.github/actions/lighthouse
+        with:
+          env: ${{ env.ENV }}
+          urls: ${{ env.URL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  lighthouse-prod:
+    runs-on: ubuntu-latest
+    env:
+      URL: "https://www.company.com/"
+      ENV: prod
+    steps:
+      - uses: actions/checkout@v3
+      - name: lighthouse-site-speed
+        uses: ./.github/actions/lighthouse
+        with:
+          env: ${{ env.ENV }}
+          urls: ${{ env.URL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,91 @@
+# https://gitlab.com/gitlab-org/quality/pipeline-common/-/blob/master/ci/dot-com/cleanup.gitlab-ci.yml
+include:
+  - local: ci/rules.gitlab-ci.yml
+  - local: ci/base.gitlab-ci.yml
+
+.qa-cleanup-base:
+  extends:
+    - .gitlab-qa-image
+  retry: 2
+
+# Delete resources created in success test suite run
+delete-test-resources:
+  extends:
+    - .gitlab-qa-image
+    - .com:rules:trigger-schedule-test-runs
+  stage: post-test
+  variables:
+    QA_TEST_RESOURCES_FILE_PATTERN: $CI_PROJECT_DIR/gitlab-qa-run-*/gitlab-*-qa-*/test-resources-*.json
+    COLORIZED_LOGS: "true"
+  script:
+    - bundle exec rake "test_resources:delete[$QA_TEST_RESOURCES_FILE_PATTERN]"
+  allow_failure: true
+  when: always
+
+# Upload resources created in failed test suite to GCS
+upload-failed-test-resources:
+  extends:
+    - .gitlab-qa-image
+    - .com:rules:trigger-schedule-test-runs
+  stage: post-test
+  variables:
+    QA_TEST_RESOURCES_FILE_PATTERN: $CI_PROJECT_DIR/gitlab-qa-run-*/gitlab-*-qa-*/failed-test-resources-*.json
+    COLORIZED_LOGS: "true"
+  script:
+    - bundle exec rake "test_resources:upload[$QA_TEST_RESOURCES_FILE_PATTERN, $CI_PROJECT_NAME]"
+  allow_failure: true
+  when: on_failure
+
+# Scheduled cleanup
+qa-subgroup-cleanup:
+  extends:
+    - .qa-cleanup-base
+    - .com:cleanup:rules:schedule-cleanup
+  stage: cleanup
+  script:
+    - bundle exec rake delete_subgroups
+
+qa-project-cleanup:
+  extends:
+    - .qa-cleanup-base
+    - .com:cleanup:rules:schedule-cleanup
+  stage: cleanup
+  script:
+    - bundle exec rake delete_projects
+
+notify-slack-cleanup-fail:
+  extends:
+    - .ruby-qa-image
+    - .gitlab-qa-install
+    - .com:cleanup:rules:schedule-cleanup
+  stage: notification
+  when: on_failure
+  variables:
+    SLACK_ICON_EMOJI: ci_failing
+    STATUS_SYM: ☠️
+  script:
+    - 'export MSG="$STATUS_SYM Cleanup on $CI_PROJECT_NAME failed! $STATUS_SYM See $CI_PIPELINE_URL."'
+    # Canary notifications currently are routed to qa-production, Staging-Canary notifications are routed to qa-staging
+    - |
+      if [[ $CI_PROJECT_NAME == "canary" ]]; then
+        export SLACK_QA_CHANNEL="qa-production"
+      elif [[ $CI_PROJECT_NAME == "staging-canary" ]]; then
+        export SLACK_QA_CHANNEL="qa-staging"
+      else
+        export SLACK_QA_CHANNEL="qa-$CI_PROJECT_NAME"
+      fi;
+    - echo "Sending '$MSG' to $SLACK_QA_CHANNEL"
+    - gitlab-qa-report --post-to-slack "$MSG"
+
+# Scheduled - download and delete resources created in failed test suite run
+delete-failed-test-resources:
+  extends:
+    - .qa-cleanup-base
+    - .com:cleanup:rules:scheduled-resources-cleanup
+  stage: cleanup
+  variables:
+    QA_TEST_RESOURCES_FILE_PATTERN: tmp/failed-test-resources-*.json
+    COLORIZED_LOGS: "true"
+  script:
+    - bundle exec rake "test_resources:download[$CI_PROJECT_NAME]"
+    - bundle exec rake "test_resources:delete[$QA_TEST_RESOURCES_FILE_PATTERN]"

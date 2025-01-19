@@ -1,0 +1,66 @@
+
+---
+name: 'pullrequest.android.validate'
+
+on:
+  # https://docs.github.com/en/actions/reference/events-that-trigger-workflows#pull_request_target
+  # By default, a workflow only runs when a pull_request_target's activity type is opened, synchronize, or reopened.
+  pull_request_target:
+    branches:
+      - 'release/*'
+      - 'dev/Sprint*'
+      - '!master'
+      - '!main'
+
+env:
+  WORKING_DIRECTORY: android
+  ARTIFACT_NAME: artifact
+  NODE_VERSION: 14.x
+  JDK_VERSION: 1.8
+  ARTIFACT_REGEX: app/build/outputs/apk/debug/*.apk
+  SIGNATURE_SHA256: "FA:C6:......:3B:9C"
+  ENVIRONMENT: dev
+
+jobs:
+  validate-android-build:
+    runs-on: ubuntu-20.04
+
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+
+    - name: setup-jdk-${{ env.JDK_VERSION }}
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.JDK_VERSION }}
+
+    - name: cache-gradle
+      uses: actions/cache@v2
+      with:
+        path: ~/.gradle/caches
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: setup-nodejs-${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: cache-npm
+      uses: actions/cache@v2
+      with:
+        path: '~/.npm'
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - run: npm install
+
+    - name: build-android-apk-(.env)
+      run: ./gradlew assembleDebug --build-cache
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      env:
+        ENVFILE: .env

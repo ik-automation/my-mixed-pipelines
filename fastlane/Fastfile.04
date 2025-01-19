@@ -1,0 +1,184 @@
+# https://athene2.informatik.unibw-muenchen.de/bachelor-thesis-hontheim/urbanlifeplusapp/-/blob/master/fastlane/Fastfile
+# ios, android
+opt_out_usage
+
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+
+  lane :deploy do
+    setup_travis
+    clean_build_artifacts
+    ensure_git_status_clean
+
+    sh(" git remote add travis https://${GH_TOKEN}@github.com/hhontheim/UrbanLifePlusApp.git > /dev/null 2>&1")
+
+    build_number = Time.new.utc.strftime("%y%m%d.%H%M")
+    git_commits_log = changelog_from_git_commits(
+      pretty: "- %s",
+      date_format: "short",
+      merge_commit_filtering: "exclude_merges",
+      match_lightweight_tag: true
+    )
+    log = "[Install directly to iOS device here!](https://hontheim.net/deploy/ulp/)\n\nChangelog:\n\n" + git_commits_log
+
+    increment_build_number(
+      build_number: build_number
+    )
+    commit_version_bump
+    new_tag = "v" + get_version_number(target: "UrbanLifePlusApp") + "\-" + get_build_number
+    add_git_tag(
+      tag: "ci/" + new_tag
+    )
+
+    match(type: "development", readonly: is_ci)
+    match(type: "adhoc", readonly: is_ci)
+
+    sh("brew install imagemagick")
+
+    gym(
+      verbose: true,
+      export_options: {
+        method: "ad-hoc",
+        include_bitcode: false,
+        include_symbols: false,
+        manifest: {
+          appURL: "url_to_replace",
+          displayImageURL: "https://hontheim.net/deploy/ulp/57.png",
+          fullSizeImageURL: "https://hontheim.net/deploy/ulp/512.png"
+        }
+      }
+    )
+
+    # run_tests
+
+    snapshot(
+      override_status_bar: true
+    )
+    frameit(
+     path: "./build/screenshots"
+    )
+    zip(
+     path: "./build/screenshots",
+     output_path: "./build/screenshots.zip"
+    )
+
+    push_to_git_remote(
+      remote: "travis",
+      local_branch: "HEAD",
+      remote_branch: ENV["TRAVIS_BRANCH"],
+      tags: true
+    )
+
+    sh("sh ./upload_sftp.sh " + new_tag)
+
+    github_release = set_github_release(
+      repository_name: "hhontheim/UrbanLifePlusApp",
+      api_token: ENV["GITHUB_TOKEN"],
+      name: new_tag,
+      tag_name: "ci/" + new_tag,
+      description: log,
+      commitish: "master",
+      is_prerelease: false,
+      upload_assets: ["./build/app.ipa", "./build/screenshots.zip"]
+    )
+
+    match(type: "appstore", readonly: is_ci)
+
+    gym(
+      verbose: true,
+      export_options: {
+        method: "app-store",
+        provisioningProfiles: {
+          "net.hontheim.UrbanLifePlusApp" => "match AppStore net.hontheim.UrbanLifePlusApp",
+          "net.hontheim.UrbanLifePlusApp.watchkitapp" => "match AppStore net.hontheim.UrbanLifePlusApp.watchkitapp",
+          "net.hontheim.UrbanLifePlusApp.watchkitapp.watchkitextension" => "match AppStore net.hontheim.UrbanLifePlusApp.watchkitapp.watchkitextension"
+        },
+        include_bitcode: true,
+        include_symbols: true,
+        thinning: "<thin-for-all-variants>"
+      }
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      apple_id: "1517216646"
+    )
+  end
+
+  lane :register do
+    register_devices(devices_file: "./devices.txt")
+    match(type: "adhoc", force_for_new_devices: true)
+    match(type: "development", force_for_new_devices: true)
+    match(type: "appstore", force_for_new_devices: true)
+  end
+
+  lane :tf do
+    gym(
+      verbose: true,
+      export_options: {
+        method: "app-store",
+        provisioningProfiles: {
+          "net.hontheim.UrbanLifePlusApp" => "match AppStore net.hontheim.UrbanLifePlusApp",
+          "net.hontheim.UrbanLifePlusApp.watchkitapp" => "match AppStore net.hontheim.UrbanLifePlusApp.watchkitapp",
+          "net.hontheim.UrbanLifePlusApp.watchkitapp.watchkitextension" => "match AppStore net.hontheim.UrbanLifePlusApp.watchkitapp.watchkitextension"
+        },
+        include_bitcode: false,
+        include_symbols: false,
+        thinning: "<thin-for-all-variants>"
+      }
+    )
+    upload_to_testflight(
+      ipa: "build/app.ipa",
+      skip_waiting_for_build_processing: true,
+      apple_id: "1517216646"
+      # uses_non_exempt_encryption: false,
+      # app_identifier: "net.hontheim.UrbanLifePlusApp",
+      # team_id: "118327074",
+      # skip_submission: true,
+      # demo_account_required: false,
+      # notify_external_testers: false,
+      # distribute_external: false,
+      # changelog: git_commits_log,
+      # localized_app_info: {
+      #   "default": {
+      #     feedback_email: "henning@hontheim.net",
+      #     marketing_url: "https://urbanlifeplus.hontheim.net/",
+      #     privacy_policy_url: "https://urbanlifeplus.hontheim.net/ios-app/datenschutzerklaerung",
+      #     description: "Testen Sie die neue Version der UrbanLife+ App!"
+      #   },
+      #   "de-DE": {
+      #     feedback_email: "henning@hontheim.net",
+      #     marketing_url: "https://urbanlifeplus.hontheim.net",
+      #     privacy_policy_url: "https://urbanlifeplus.hontheim.net/ios-app/datenschutzerklaerung",
+      #     description: "Testen Sie die neue Version der UrbanLife+ App!"
+      #   }
+      # },
+      # localized_build_info: {
+      #   "default": {
+      #     whats_new: git_commits_log
+      #   },
+      #   "de-DE": {
+      #     whats_new: git_commits_log
+      #   }
+      # }
+    )
+  end
+
+end
+

@@ -1,0 +1,9 @@
+# https://gitlab.com/gitlab-org/gitlab-build-images/-/blob/master/Dockerfile.release-tools
+FROM ruby:2.7-alpine
+
+RUN apk add --update --no-cache build-base cmake git openssh-client openssl-dev
+
+# Set UTF-8 http://jaredmarkell.com/docker-and-locales/
+ENV LANG C.UTF-8
+ENV LANGUAGE C
+ENV LC_ALL C.UTF-8

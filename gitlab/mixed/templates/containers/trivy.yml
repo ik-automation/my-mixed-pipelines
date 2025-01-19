@@ -1,0 +1,79 @@
+.containers.trivy:
+  interruptible: true
+  inherit:
+    default: false
+  image:
+    name: gitlab-registry.shops.com/security/trivy:master
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY:      "none"
+    TRIVY_SEVERITY:    "HIGH,CRITICAL"
+    TRIVY_IGNORE_UNFIXED: "true"
+    TRIVY_USERNAME:    "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD:    "$CI_REGISTRY_PASSWORD"
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_QUIET:       "true"
+    TRIVY_DEBUG:       "$CI_DEBUG_TRACE"
+  artifacts:
+    when: always
+    reports:
+      junit: trivy.xml
+    expose_as: 'Trivy Report'
+    paths:
+      - trivy.xml
+  before_script: []
+  script:
+    - | # --- -- -
+      # Configure
+      if [ -z "${TARGET_IMAGE:-}" ]; then
+        REGISTRY_SUB_PATH="${REGISTRY_SUB_PATH=$CI_COMMIT_REF_SLUG}"
+        TARGET_IMAGE="${CI_REGISTRY_IMAGE:?}${REGISTRY_SUB_PATH:+/$REGISTRY_SUB_PATH}:${IMAGE_TAG:-$CI_COMMIT_SHORT_SHA}"
+      elif [ -f "${TARGET_IMAGE}" ] || [ -d "${TARGET_IMAGE}" ]; then
+        LOCAL_IMAGE="true"
+      fi
+
+    - | # --- -- -
+      # Build full report
+      trivy \
+        image \
+          --light=false \
+          --exit-code=0 \
+          --no-progress \
+          --skip-update \
+          --ignore-unfixed=false \
+          --severity="UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL" \
+          --format=template \
+          --template="@/contrib/junit.tpl" \
+          --output="trivy.xml" \
+          ${LOCAL_IMAGE:+--input} "${TARGET_IMAGE}"
+
+    - | # --- -- -
+      # Print light report
+      trivy \
+        --cache-dir $TRIVY_CACHE_DIR/light \
+        image \
+          --light \
+          --exit-code=0 \
+          --no-progress \
+          --skip-update \
+          --format=table \
+          --severity "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL" \
+          --output=/dev/stdout \
+          ${LOCAL_IMAGE:+--input} "${TARGET_IMAGE}"
+
+      printf '\e[0;33m%b\e[m\n' \
+        "⠀" \
+        "📋 The full report is available at" \
+        "⠀⠀\e[1;33m${CI_PIPELINE_URL:?}/test_report\e[m" \
+        "⠀"
+
+    - | # --- -- -
+      # Fail on vulnerabilities
+      trivy \
+        image \
+          --light=false \
+          --exit-code=1 \
+          --no-progress \
+          --skip-update \
+          --output=/dev/null \
+          ${LOCAL_IMAGE:+--input} "${TARGET_IMAGE}"

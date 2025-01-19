@@ -1,0 +1,26 @@
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action
+name: 'slack'
+description: 'Publish a message in a channel or send a JSON payload to the Slack Workflow Builder'
+
+inputs:
+  slack-webhook:
+    description: >-
+      the webhook URL (https://hooks.slack.com/workflows/....
+    required: false
+  status:
+    description: >
+      The current status of the job. Possible values are success, failure, or cancelled.
+    required: false
+    default: success
+  channel-id:
+    description: >
+      Slack channel id, channel name, or user id to post message.
+    required: false
+  payload:
+    description: >
+      'JSON payload to send to Slack if webhook route. If not supplied, json from GitHub event will be sent instead'
+    required: true
+
+runs:
+  using: 'node16'
+  main: 'dist/index.js'

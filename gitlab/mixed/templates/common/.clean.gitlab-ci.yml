@@ -1,0 +1,284 @@
+.staging_clean:
+  extends: .clean
+  tags:
+    - staging
+    - deploy
+  environment:
+    name: staging/$CI_COMMIT_REF_SLUG
+    action: stop
+
+.dev_clean:
+  extends: .clean
+  tags:
+    - development
+    - deploy
+  except:
+    refs:
+      - tags
+      - /^(release|hotfix)\/.+$/
+      - stable
+      - trunk
+      - release
+  environment:
+    name: development/$CI_COMMIT_REF_SLUG
+    action: stop
+
+.production_clean:
+  extends: .clean
+  tags:
+    - production
+    - deploy
+  environment:
+    name: production
+    action: stop
+
+.clean development:
+  extends: .dev_clean
+  script:
+    - run_ci
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "development"
+
+.dev clean cron:
+  extends: .dev_clean
+  environment:
+    name: development/${CI_COMMIT_REF_SLUG}-cron
+    action: stop
+  script:
+    - run_ci
+  only:
+    variables:
+      - $CRONJOB == "yes"
+
+.dev clean single:
+  extends: .dev_clean
+  script:
+    - helm_delete_branch "${SERVICE_NAME}"
+    - clean_config
+  only:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "development"
+
+.staging clean:
+  extends: .staging_clean
+  script:
+    - helm_delete_branch "${SERVICE_NAME}-${CI_COMMIT_REF_SLUG}"
+    - version="$JIRA_VERSION_PREFIX$IMAGE_TAG"
+    - jira_delete_release_branch "$version"
+  only:
+    - /^(release|hotfix)\/.+$/
+    - trunk
+    - release
+    - stable
+  except:
+    refs:
+      - tags
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+
+.staging clean latest:
+  extends: .staging_clean
+  environment:
+    name: staging/latest
+    action: stop
+  script:
+    - helm_delete_branch "${SERVICE_NAME}-latest"
+  only:
+    - master
+  except:
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+
+.staging clean cron:
+  extends: .staging_clean
+  environment:
+    name: staging/${CI_COMMIT_REF_SLUG}-cron
+    action: stop
+  script:
+    - run_ci
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    refs:
+      - tags
+
+.def route stg clean:
+  extends: .ci_function
+  stage: close
+  tags:
+    - staging
+    - deploy
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - helm_delete_branch "${SERVICE_NAME}"
+  only:
+    - master
+  except:
+    refs:
+      - tags
+    variables:
+      - $SINGLE_DEPLOY
+  environment:
+    name: default-staging
+    action: stop
+  when: manual
+
+.staging clean single:
+  extends: .staging_clean
+  script:
+    - helm_delete_branch "${SERVICE_NAME}"
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  except:
+    - tags
+
+.production clean:
+  extends: .production_clean
+  only:
+    refs:
+      - tags
+    variables:
+      - $CI_PROJECT_NAMESPACE == "deploy/examples"
+      - $CI_PROJECT_NAMESPACE == "lms/cea"
+  environment:
+    name: production
+    action: stop
+
+.production clean cron:
+  extends: .production_clean
+  environment:
+    name: production-cron
+    action: stop
+  script:
+    - run_ci
+  only:
+    refs:
+      - tags
+    variables:
+      - $CRONJOB == "yes"
+  except:
+    - /^.*\/.*$/
+
+.registry clean:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: close
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - run_ci
+  environment:
+    name: registry/$CI_COMMIT_REF_SLUG
+    action: stop
+  except:
+    refs:
+      - tags
+    variables:
+      - $SINGLE_DEPLOY == "true"
+      - $SINGLE_DEPLOY == "staging"
+  needs: ["create image"]
+  when: manual
+
+.def route dev clean:
+  extends: .ci_function
+  stage: close
+  tags:
+    - development
+    - deploy
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - helm_delete_branch "${SERVICE_NAME}"
+  only:
+    - master
+  except:
+    refs:
+      - tags
+    variables:
+      - $SINGLE_DEPLOY
+  environment:
+    name: default-dev
+    action: stop
+  when: manual
+
+.staging clean job:
+  extends: .staging_clean
+  environment:
+    name: staging/${CI_COMMIT_REF_SLUG}-job
+    action: stop
+  variables:
+    JOBS_DEPLOY: "true"
+  script:
+    - helm_delete_cron
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+      - trunk
+      - release
+      - stable
+      - master
+    variables:
+      - $JOBS == "yes"
+  except:
+    refs:
+      - tags
+
+.dev clean job:
+  extends: .dev_clean
+  environment:
+    name: development/${CI_COMMIT_REF_SLUG}-job
+    action: stop
+  variables:
+    JOBS_DEPLOY: "true"
+  script:
+    - helm_delete_cron
+  only:
+    variables:
+      - $JOBS == "yes"
+
+.production clean job:
+  extends: .production_clean
+  environment:
+    name: production-job
+    action: stop
+  variables:
+    JOBS_DEPLOY: "true"
+  script:
+    - helm_delete_cron
+  only:
+    refs:
+      - tags
+    variables:
+      - $JOBS == "yes"
+  except:
+    - /^.*\/.*$/
+
+.clear old ns:
+  extends: .tmp deploy
+  script:
+    - delete_release_from_ns
+
+.delete tmp:
+  extends: .clear old ns
+  stage: close

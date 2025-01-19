@@ -1,0 +1,117 @@
+# https://github.com/ik-platform/kusion-platform-fork/blob/main/.goreleaser.yml
+# For more information, check the documentation at http://goreleaser.com
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    - go generate ./pkg/version
+
+builds:
+  - id: default
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -tags=rpc
+    # ldflags="-s -w" removes the symbol table and debugging information to reduce the size of the release package
+    ldflags:
+      - -s
+      - -w
+    ignore:
+      - goos: linux
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+    main: .
+
+archives:
+  - id: default
+    builds:
+      - default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: KusionStack
+    name: kusion
+  draft: false
+  footer: |
+    ## Docker Images
+    * `kusionstack/kusion:{{ .Env.KUSION_VERSION }}`
+
+    ## Dependent version
+    * [kcl-go](https://github.com/kcl-lang/kcl-go): `{{ .Env.KCL_GO_VERSION }}`
+    * [kcl-plugin](https://github.com/kcl-lang/kcl-plugin): `{{ .Env.KCL_PLUGIN_VERSION }}`
+
+dockers:
+  - use: buildx
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile
+    image_templates:
+      - kusionstack/{{ .ProjectName }}:{{ .Tag }}
+      - kusionstack/{{ .ProjectName }}:latest
+    build_flag_templates:
+      - "--target=goreleaser"
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.name={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--platform=linux/amd64"
+
+brews:
+  - repository:
+      owner: KusionStack
+      name: homebrew-tap
+    url_template: "https://github.com/KusionStack/kusion/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    download_strategy: CurlDownloadStrategy
+    # Git author used to commit to the repository.
+    # Defaults are shown.
+    commit_author:
+      name: GoReleaser Bot
+      email: goreleaser@carlosbecker.com
+    directory: HomebrewFormula
+    homepage: "https://github.com/KusionStack/kusion"
+    description: "Codify and deliver intentions to Kubernetes and Clouds"
+    license: "Apache License"
+    skip_upload: false
+    test: |
+      system "#{bin}/kusion version"
+
+scoops:
+  - url_template: "https://github.com/KusionStack/kusion/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    repository:
+      owner: KusionStack
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: Scoops
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "http://github.com/KusionStack/kusion"
+    description: "Codify and deliver intentions to Kubernetes and Clouds."
+    license: Apache License 2.0

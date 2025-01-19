@@ -1,0 +1,72 @@
+---
+source: https://github.com/sindresorhus/refined-github/blob/main/.github/workflows/test.yml
+tags: ['github action', 'multi', 'jobs']
+---
+
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - '*'
+  push:
+    branches:
+      - main
+      - 'test/*'
+
+jobs:
+  Security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: npx lockfile-lint --path package-lock.json --validate-https
+
+  AVA:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 14
+      - run: npm ci
+      - run: npm run ava -- --serial
+
+  Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: npm ci
+      - run: npm run lint
+
+  Types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: npm ci
+      - run: npm run build:typescript
+
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 14
+      - run: npm ci
+      - run: npm run build:webpack
+      - uses: actions/upload-artifact@v2
+        with:
+          name: refined-github
+          path: distribution
+
+  Safari:
+    runs-on: macos-latest
+    needs: Build
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2 # npm install+build seems slow and problematic on macOS
+        with:
+          name: refined-github
+          path: distribution
+      - uses: maxim-lobanov/setup-xcode@v1
+      - run: npm run pack:safari

@@ -1,0 +1,80 @@
+include:
+  - local: "/pci-dss/.packages.gitlab-ci.yml"
+
+stages:
+  - build
+  - tests
+  - deploy
+
+.release:
+  extends:
+    - .pci-dss job
+    - .prod
+  stage: build
+  only:
+    - /^release(\/.+)?$/
+
+.releases_and_tags:
+  except: &releases_and_tags
+    - /^(release|hotfix)\/.+$/
+    - tags
+
+verify:
+  extends: .release
+  only:
+    - merge_requests
+    - /^(release|hotfix)\/.+$/
+
+#
+# Build
+#
+.build_template:
+  extends: .release
+  image: '${DOTNET_IMAGE}'
+  artifacts:
+    expire_in: '4 hrs'
+    paths: ['artifacts/']
+  cache:
+    key: 'packages'
+    paths: ['packages/']
+
+build:
+  extends:
+    - .stg
+    - .build_template
+  only: [refs, branches]
+  except: *releases_and_tags
+
+build release dotnet:
+  extends: 
+    - .prod
+    - .build_template
+
+#
+# Publish
+#
+.publish_template:
+  stage: deploy
+  image: '${DOTNET_IMAGE}'
+
+publish:
+  extends:
+    - .release
+    - .stg
+    - .publish_template
+  only: [refs, branches]
+  dependencies: ["build", "build release dotnet"]
+  variables:
+    GIT_STRATEGY: none
+  # needs: ["build", "build release dotnet"]
+
+publish prod:
+  extends:
+    - .release
+    - .prod
+    - .publish_template
+  dependencies: ["build release dotnet"]
+  needs: ["verify", "build release dotnet"]
+  only: *releases_and_tags
+  when: manual
+

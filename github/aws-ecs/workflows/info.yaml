@@ -1,0 +1,64 @@
+name: info
+
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    action:
+      description: "Where to run action or not"
+      required: false
+      default: run
+      type: choice
+      options:
+        - run
+        - do-not-run
+jobs:
+  info-helper:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: test-installed-tooling
+      run: |
+        docker ps
+        kubectl version --client=true --short=true
+        helm version
+        aws --version
+        yq --version
+        python --version
+        python3 --version
+        node --version
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+
+    - name: View context attributes
+      uses: actions/github-script@v6
+      if: ${{ failure() }}
+      with:
+        script: console.log(context)
+
+    - name: send-slack
+      if: ${{ failure() }}
+      uses: ./.github/actions/slack
+      with:
+        payload: |
+          {
+            "service": "info",
+            "buildurl": "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}",
+            "rebuildurl": "https://github.com/${{github.repository}}/actions/workflows/${{github.workflow}}.yaml",
+            "status": "${{ job.status }}",
+            "env": "dev",
+            "version": "0.0.1",
+            "actor": "https://github.com/${{ github.actor }}"
+          }
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    - name: summary
+      if: ${{ always() }}
+      uses: ./.github/actions/summary
+      with:
+        env: dev
+        cluster: test-cluster
+        service-name: info
+        service-version: v0.0.89

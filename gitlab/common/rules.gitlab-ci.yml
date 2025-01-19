@@ -1,0 +1,181 @@
+# https://gitlab.com/gitlab-org/quality/pipeline-common/-/blob/master/ci/rules.gitlab-ci.yml
+.web: &web
+  if: '$CI_PIPELINE_SOURCE == "web"'
+
+.mr: &mr
+  if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+.schedule: &schedule
+  if: '$CI_PIPELINE_SOURCE == "schedule"'
+
+.tag: &tag
+  if: $CI_COMMIT_TAG
+
+.smoke: &trigger-schedule-smoke
+  if: '($CI_PIPELINE_SOURCE == "trigger" || $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "schedule") && $SMOKE_ONLY == "true"'
+
+.full: &trigger-schedule-full
+  if: '($CI_PIPELINE_SOURCE == "trigger" || $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "schedule") && $FULL_ONLY == "true"'
+
+.geo: &schedule-geo
+  if: '$CI_PIPELINE_SOURCE == "schedule" && $GEO_ONLY == "true"'
+
+.schedule-quarantine: &schedule-quarantine
+  if: '$CI_PIPELINE_SOURCE == "schedule" && $QUARANTINE_ONLY == "true"'
+
+# Old general resource cleanup script
+.cleanup: &schedule-cleanup
+  if: '$CI_PIPELINE_SOURCE == "schedule" && $RUN_CLEANUP == "true"'
+
+# Delayed saved test run resource cleanup
+.scheduled_resources_cleanup: &scheduled_resources_cleanup
+  if: '$CI_PIPELINE_SOURCE == "schedule" && $RESOURCES_CLEANUP == "true"'
+
+.pipeline-common-ref-update-schedule: &pipeline-common-ref-update-schedule
+  if: '$CI_PIPELINE_SOURCE == "schedule" && $UPDATE_INCLUDE_REF == "true"'
+
+# ==========================================
+# RULES
+# ==========================================
+
+# ------------------------------------------
+# generic
+# ------------------------------------------
+.rules:mr:
+  rules:
+    - *mr
+
+.rules:tag:
+  rules:
+    - *tag
+
+# ------------------------------------------
+# dot-com
+# ------------------------------------------
+# qa jobs
+.com:qa:rules:trigger-schedule-smoke:
+  rules:
+    - *trigger-schedule-smoke
+    - <<: *web
+      when: manual
+    - <<: *mr
+      when: manual
+      allow_failure: true
+
+.com:qa:rules:trigger-schedule-full:
+  rules:
+    - *trigger-schedule-full
+    - <<: *web
+      when: manual
+    - <<: *mr
+      when: manual
+      allow_failure: true
+
+.com:qa:rules:schedule-geo:
+  rules:
+    - *schedule-geo
+    - <<: *web
+      when: manual
+    - <<: *mr
+      when: manual
+      allow_failure: true
+
+.com:qa:rules:quarantine-only:
+  rules:
+    - <<: *schedule-quarantine
+      allow_failure: true
+    - <<: *web
+      when: manual
+      allow_failure: true
+
+.com:qa:rules:knapsack-report-download:
+  rules:
+    - <<: *trigger-schedule-smoke
+      variables:
+        QA_KNAPSACK_REPORTS: qa-smoke,qa-reliable
+    - <<: *trigger-schedule-full
+      variables:
+        QA_KNAPSACK_REPORTS: qa-browser_ui-3_create,qa-browser_ui-4_verify,qa-browser_ui-5_package
+
+# reports and notifications
+.com:report:rules:trigger-schedule-test-runs:
+  rules:
+    - *trigger-schedule-smoke
+    - *trigger-schedule-full
+
+# resource cleanup
+.com:cleanup:rules:schedule-cleanup:
+  rules:
+    - *schedule-cleanup
+
+.com:cleanup:rules:scheduled-resources-cleanup:
+  rules:
+    - *scheduled_resources_cleanup
+
+# universal rules
+.com:rules:trigger-schedule-test-runs:
+  rules:
+    - *trigger-schedule-smoke
+    - *trigger-schedule-full
+    - *schedule-quarantine
+    - <<: *web
+      when: manual
+
+# ------------------------------------------
+# nightly
+# ------------------------------------------
+# qa jobs
+.nightly:rules:sanity:
+  rules:
+    - <<: *pipeline-common-ref-update-schedule
+      when: never
+    - <<: *web
+    - <<: *mr
+      when: manual
+      allow_failure: true
+    - <<: *schedule
+
+.nightly:rules:qa:
+  rules:
+    - <<: *pipeline-common-ref-update-schedule
+      when: never
+    - <<: *web
+    - <<: *mr
+      when: manual
+      allow_failure: true
+      variables:
+        SKIP_REPORT_IN_ISSUES: "true"
+    - *schedule
+
+.nightly:rules:quarantine:
+  rules:
+    - <<: *pipeline-common-ref-update-schedule
+      when: never
+    - <<: *web
+    - <<: *mr
+      when: manual
+      allow_failure: true
+      variables:
+        SKIP_REPORT_IN_ISSUES: "true"
+    - *schedule
+
+# report jobs
+.nightly:report:rules:allure-report:
+  rules:
+    - <<: *pipeline-common-ref-update-schedule
+      when: never
+    - <<: *web
+      when: never
+    - <<: *schedule
+      when: always
+    - <<: *mr
+      when: manual
+
+# notification jobs
+.nightly:rules:notify:
+  rules:
+    - <<: *pipeline-common-ref-update-schedule
+      when: never
+    - <<: *web
+      when: never
+    - *schedule

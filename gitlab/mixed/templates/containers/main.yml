@@ -1,0 +1,66 @@
+include:
+  - local: '/templates/containers/kaniko.yml'
+  - local: '/templates/containers/trivy.yml'
+
+# ---------------------------------------
+# for backward compability
+
+.security scan:
+  extends: .containers.trivy
+  stage: deploy
+  only:
+    - stable
+    - release
+    - trunk
+    - /^(release|hotfix)\/.+$/
+  except:
+    - tags
+  allow_failure: true
+  variables:
+    TARGET_IMAGE: $CREATE_IMAGE
+
+.template-kaniko-build:
+  extends: .containers.kaniko
+  stage: build-and-push
+  before_script:
+    - | # --- -- -
+      # Set variables
+
+      export BUILD_CONTEXT="${CONTEXT:-}"
+
+      if [ -n "${VERSION:-}" ]; then
+        if [ "${CI_COMMIT_REF_SLUG:?}" == "master" ]; then
+          FINAL_VERSION="${VERSION}"
+        else
+          FINAL_VERSION="${CI_COMMIT_REF_SLUG}-${VERSION}"
+        fi
+      fi
+
+      export BUILD_DST="${CI_REGISTRY}/${CONTAINER_PATH:-$CI_PROJECT_PATH}${IMAGE_NAME:+/$IMAGE_NAME}:${FINAL_VERSION:-$CI_COMMIT_REF_SLUG}"
+      if [ "${ROOT_IMAGE:-}" == "true" ]; then
+        export BUILD_DST="${CI_REGISTRY}/${CONTAINER_PATH:-$CI_PROJECT_PATH}:${FINAL_VERSION:-$CI_COMMIT_REF_SLUG}"
+      fi
+
+.template-build-and-push:
+  extends: .template-kaniko-build
+
+.trivy_scan:
+  extends: .containers.trivy
+  before_script:
+    - &b4 | # --- -- -
+      # Set image name
+      export REGISTRY_SUB_PATH="${IMAGE_NAME:-$CI_COMMIT_REF_SLUG}"
+      if [ "${ROOT_IMAGE:-}" == "true" ]; then
+        export REGISTRY_SUB_PATH=""
+      fi
+
+.template-scan:
+  extends: .trivy_scan
+  before_script:
+    - *b4
+    - | # --- -- -
+      # Set image tag
+      if [ "${CI_COMMIT_REF_SLUG}" != "master" ]; then
+        export IMAGE_TAG="${CI_COMMIT_REF_SLUG}-${IMAGE_TAG}"
+      fi
+  allow_failure: false

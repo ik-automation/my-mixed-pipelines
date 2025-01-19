@@ -1,0 +1,181 @@
+.merge master:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: .pre
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - merge_master
+  only:
+    - /^(release|hotfix)\/.+$/
+    - stable
+    - trunk
+    - develop
+    - release
+
+.create release:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: .pre
+  variables:
+    GIT_STRATEGY: none
+  only:
+    - /^(release|hotfix)\/.+$/
+  except:
+    - tags
+  script:
+    - version="${JIRA_VERSION_PREFIX}${REPO_NAME}${RELEASE_SUF}_${RELEASE_TAG}"
+    - jira_version_create $version
+    - jira_issues_set_version $version
+    - confluence_release_page
+
+.create image:
+  extends:
+    - .ci_function
+    - .ci-job
+  interruptible: true
+  stage: publish
+  tags:
+    - registry
+  except:
+    - tags
+  script:
+    - run_ci
+  # variables:
+  #   GIT_DEPTH: "0"
+  environment:
+    name: registry/$CI_COMMIT_REF_SLUG
+    on_stop: registry clean
+
+.release image:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: publish
+  tags:
+    - registry
+  only:
+    - tags
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - docker_image_release "$CI_COMMIT_REF_SLUG"
+  variables:
+    GIT_STRATEGY: none
+
+.merge to active releases:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: publish
+  allow_failure: true
+  script:
+    - merge_master_to_releases
+  only:
+    refs:
+      - master
+    variables:
+      - $ENABLE_MERGE_MASTER_TO_RELEASES
+
+.ready to prod:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: close
+  variables:
+    GIT_STRATEGY: none
+  only:
+    - /^(release|hotfix)\/.+$/
+    - trunk
+    - release
+    - stable
+  except:
+    - tags
+  script:
+    - git_check_ref_is_head
+    - check_merge_approvals
+    - git_commit_time
+    - version_name="${JIRA_VERSION_PREFIX}${REPO_NAME}${RELEASE_SUF}_${RELEASE_TAG}"
+    - new_version_name="${JIRA_VERSION_PREFIX}${REPO_NAME}${RELEASE_SUF}_${GIT_COMMIT_TIME}"
+    - echo -e "Old version '${version_name}'\nNew version '${new_version_name}'"
+    - jira_issues_check_status
+    - merge_master
+    - jira_version_check
+    - jira_version_update "${version_name}" "${new_version_name}"
+    - set_tags
+    - gitlab_create_release "${new_version_name}"
+    - release_notes
+    - k8s_default_ver "$SERVICE_NAME"
+  when: manual
+
+.close release:
+  allow_failure: false
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: close
+  only:
+    - tags
+  variables:
+    GIT_STRATEGY: none
+  except:
+    refs:
+      - /^.*\/.*$/
+    variables:
+      - $BLUE_GREEN == "yes"
+      - $DEPLOY_TAG
+  script:
+    - jira_issues_close $(jira_issues_get)
+    - set +e
+    - jira_version_release
+    - slack_notify_release "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - email_notify "${JIRA_VERSION_PREFIX}${CI_COMMIT_REF_NAME}"
+    - set -e
+    - docker_latest_tagging
+    - merge_to_master
+  when: manual
+#  start_in: 60 minutes
+  needs:
+    - "production"
+    - "release image"
+    - "check alerts"
+
+.delete merged branches:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: close
+  only:
+    - master
+  script:
+    - run_ci
+
+.create mr:
+  extends:
+    - .ci_function
+    - .ci-job
+  stage: tests
+  script:
+    - gitlab_create_mr
+  only: [external]
+
+.release:
+  extends:
+    - .ci-job
+  stage: close
+  dependencies: []
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: manual
+  before_script:
+    - url_host=$(git remote get-url origin | sed -e "s/https:\\/\\/gitlab-ci-token:.*@//g")
+    - git remote set-url origin "https://gitlab-ci-token:${GITLAB_API_TOKEN}@${url_host}"
+  script:
+    - release_name="release/${CI_PIPELINE_ID}"
+    - git checkout -b "$release_name"
+    - git push -u origin "$release_name"

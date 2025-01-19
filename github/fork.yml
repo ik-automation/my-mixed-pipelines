@@ -1,0 +1,32 @@
+---
+source:
+- https://github.com/marketplace/actions/fork-sync-with-upstream
+- https://github.com/tgymnich/fork-sync
+tags: ['github action', 'fork', 'update', 'upstream']
+---
+
+
+# Step 2: run this sync action - specify the upstream repo, upstream branch to sync with, and target sync branch
+  - name: Pull (Fast-Forward) upstream changes
+    id: sync
+    uses: aormsby/Fork-Sync-With-Upstream-action@v2.1
+    with:
+      upstream_repository: aormsby/hugo-deploy-to-pages
+      upstream_branch: main
+      target_branch: main
+      git_pull_args: --ff-only                    # optional arg use, defaults to simple 'pull'
+      # github_token: ${{ secrets.GITHUB_TOKEN }}   # optional, for accessing repos that require authenticatio
+      # Step 3: Display a message if 'sync' step had new commits (simple test)
+    - name: Check for new commits
+      if: steps.sync.outputs.has_new_commits
+      run: echo "There were new commits."
+
+    - uses: tgymnich/fork-sync@v1.4
+        with:
+          owner: ${{ env.OWNER }}
+          base: main
+          head: main
+
+      # Step 4: Print a helpful timestamp for your records (not required, just nice)
+      - name: Timestamp
+        run: date

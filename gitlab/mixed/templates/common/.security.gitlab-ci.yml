@@ -1,0 +1,23 @@
+.dtrack dotnet:
+  stage: build
+  allow_failure: true
+  timeout: 10 minutes
+  tags:
+    - dtrack
+  variables:
+    DTRACK_API_URL: "https://dtrack.o3.ru"
+    NUGET_PACKAGES: "$CI_PROJECT_DIR/packages"
+  image: '$CI_REGISTRY/docker/dotnet/custom/dtrack:3.1'
+  before_script:
+    - source ${CI_DOTNET_DTRACK_INCLUDE}
+  script:
+    - 'dtrack_find_sln_file_task'
+    - 'dtrack_audit_task'
+  cache:
+    paths:
+      - 'packages/'
+  only:
+    refs:
+      - /^(release|hotfix)\/.+$/
+    variables:
+      - '$CI_DOTNET_APPLICATION_PROJECT && $DTRACK_PROJECT_ID == null && $DTRACK_DOTNET_DISABLED == null'

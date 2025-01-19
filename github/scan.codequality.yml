@@ -1,0 +1,61 @@
+# source:
+# - https://github.com/search?o=desc&q=github%2Fcodeql-action+path%3A.github%2Fworkflows+language%3AYAML&s=&type=Code
+# - https://github.com/gofunky/interactive-event-dispatcher/blob/17ba90630a3a4f5a482d3feb810f4adccb9a3a99/.github/workflows/codeql.yml
+# - https://github.com/microsoft/AdaptiveCards/blob/0ceb34c39647f0fe811e51554466a7d417855a27/.github/workflows/codeql.yml
+# - https://github.com/github/codeql-action
+# tags: ['github action', 'scan', 'code quality', analyze, security]
+
+name: scan code quality
+
+on:
+  push:
+    branches:
+      - master
+  pull_request_target:
+    branches:
+      - master
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out code (push)
+        if: github.event.pull_request.number == ''
+        uses: actions/checkout@v2.3.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: check out code (pull request)
+        if: github.event.pull_request.number != ''
+        uses: actions/checkout@v2.3.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          fetch-depth: 2
+          persist-credentials: false
+      - name: initialize CodeQL
+        uses: github/codeql-action/init@v1
+        with:
+          config-file: ./.github/codeql.yml
+      - name: autobuild
+        uses: github/codeql-action/autobuild@v1
+      - name: perform CodeQL analysis
+        uses: github/codeql-action/analyze@v1
+
+
+---
+# codeql.yml
+
+name: typescript code quality
+
+queries:
+  - uses: security-and-quality
+
+paths:
+  - src
+paths-ignore:
+  - node_modules
+  - lib
+  - dist
+  -

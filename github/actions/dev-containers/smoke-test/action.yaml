@@ -1,0 +1,31 @@
+name: 'Smoke test'
+inputs:
+  image:
+    description: 'Image to test'
+    required: true
+    default: 'base-debian'
+  threshold:
+    description: 'Threshold (in GB) to validate that the image size does not excced this limit'
+    required: false
+    default: 14
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout main
+      id: checkout_release
+      uses: actions/checkout@v3
+      with:
+        repository: 'devcontainers/images'
+        path: '__build'
+        ref: 'main'
+
+    - name: Build image
+      id: build_image
+      shell: bash
+      run: ${{ github.action_path }}/build.sh ${{ inputs.image }}
+
+    - name: Test image
+      id: test_image
+      shell: bash
+      run: ${{ github.action_path }}/test.sh  ${{ inputs.image }} ${{ inputs.threshold }}

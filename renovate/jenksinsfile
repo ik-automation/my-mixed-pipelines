@@ -1,0 +1,123 @@
+pipeline {
+  agent {
+    docker {
+      // Pull the Renovate image
+      image 'renovate/renovate'
+
+      // Pass in the docker host and mount a temporary directory to store
+      // working files for as long as this node continues to exist
+      args '-v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp'
+
+      // Pull renovate image from our private repository
+      registryUrl 'https://ourprivaterepository'
+      registryCredentialsId 'XXXX'
+
+      reuseNode true
+    }
+  }
+
+  environment {
+    GITHUB_COM_TOKEN = credentials('renovate-github-token')
+
+    GIT_AUTHOR_NAME = 'Renovate Bot'
+    GIT_AUTHOR_EMAIL = 'renovatebot@example.com'
+    GIT_COMMITTER_NAME = 'Renovate Bot'
+    GIT_COMMITTER_EMAIL = 'renovatebot@example.com'
+
+    RENOVATE_PLATFORM = 'gitlab'
+    RENOVATE_ENDPOINT = 'https://ourselfhostedgitlabapiurl'
+    RENOVATE_TOKEN = credentials('renovate-gitlab-token')
+
+    RENOVATE_REPOSITORY_CACHE = 'enabled'
+    RENOVATE_REPOSITORY_CACHE_TYPE = "s3://s3bucketcacheurl"
+
+    // AWS_ACCESS_KEY_ID
+    // AWS_SECRET_ACCESS_KEY
+    // AWS_SESSION_TOKEN
+    AWS_REGION = 'eu-west-1'
+
+    RENOVATE_OPTIMIZE_FOR_DISABLED = 'true'
+    RENOVATE_PERSIST_REPO_DATA = 'true'
+
+    RENOVATE_AUTODISCOVER = 'true'
+    RENOVATE_AUTODISCOVER_FILTER = "/^(folders-we-want-to-include)/.*/"
+
+    RENOVATE_PR_COMMITS_PER_RUN_LIMIT = '0'
+    RENOVATE_PR_HOURLY_LIMIT = '5'
+    RENOVATE_PR_CONCURRENT_LIMIT = '10'
+    RENOVATE_COMMIT_MESSAGE_PREFIX = '[RENOVATE]'
+
+    // Good practice to sign our commits
+    RENOVATE_GIT_PRIVATE_KEY = credentials('renovate-gpg-private-key')
+
+    RENOVATE_LABELS = "['automated-dependency-upgrade']"
+
+    RENOVATE_BASE_DIR = '/tmp/renovate'
+    RENOVATE_CACHE_DIR = '/tmp/renovate/cache'
+    RENOVATE_TMPDIR = '/tmp/renovate'
+
+    RENOVATE_DOCKER_USER = 'root'
+
+    RENOVATE_ONBOARDING_CONFIG = '{"$schema": "https://docs.renovatebot.com/renovate-schema.json", "extends": ["config:base"], "packageRules": [{"matchDatasources": ["maven"], "registryUrls": ["https://ourprivatenexus/repository/all/"]}, { "matchDatasources": ["npm"], "registryUrls": ["https://ourprivatenexus/repository/npm-all/"] }]}'
+
+    RENOVATE_LOG_FILE_LEVEL = 'debug'
+    RENOVATE_DETECT_HOST_RULES_FROM_ENV = 'true'
+
+    MAVEN_NEXUS_PRIVATECLOUD_CO_UK_USERNAME = 'renovate'
+    MAVEN_NEXUS_PRIVATECLOUD_CO_UK_PASSWORD = credentials('renovate-nexus-password')
+  }
+
+  parameters {
+    string defaultValue: '', description: '', name: 'RENOVATE_ARGS', trim: true
+  }
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 1, unit: 'HOURS')
+    ansiColor('xterm')
+    buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: env.BRANCH_NAME == 'master' ? '240' : '')
+  }
+  triggers {
+    cron(env.BRANCH_NAME == 'master' ? 'H/30 6-17 * * 1-5' : '')
+  }
+  stages {
+    stage('Initialize') {
+      steps {
+        sh 'rm -f renovate.log'
+      }
+    }
+
+    stage('Dry Run') {
+      when {
+        not {
+          branch 'master'
+        }
+      }
+
+      environment {
+        RENOVATE_GIT_AUTHOR = 'Renovate Test Bot <renovatebot@example.com>'
+        GIT_AUTHOR_NAME = 'Renovate Test Bot'
+        GIT_COMMITTER_NAME = 'Renovate Test Bot'
+      }
+
+      steps {
+        sh 'renovate --dry-run --log-file renovate.log --log-file-level debug --autodiscover-filter \'mercury/*\''
+      }
+    }
+
+    stage('Run Renovate') {
+      when {
+        branch 'master'
+      }
+      steps {
+        sh "renovate --log-file renovate.log --log-file-level debug ${params.RENOVATE_ARGS}"
+      }
+    }
+  }
+  post {
+    always {
+      archiveArtifacts allowEmptyArchive: true, artifacts: 'renovate.log'
+    }
+  }
+}

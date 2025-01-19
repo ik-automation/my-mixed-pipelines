@@ -1,0 +1,47 @@
+stages:
+  - review
+
+variables:
+  DANGER_GITLAB_API_TOKEN: "XXXXXXXX"
+  DANGER_GITLAB_HOST: "git.example.com"
+  DANGER_GITLAB_API_BASE_URL: "https://git.example.com/api/v4"
+
+danger:
+  stage: review
+  before_script:
+    - export CI_MERGE_REQUEST_ID=$(git ls-remote -q origin merge-requests\*\head | grep $CI_COMMIT_SHA | sed 's/.*refs\/merge-requests\/\([0-9]*\)\/head/\1/g')
+    - bundle install
+  script:
+    - bundle exec danger --verbose
+
+stages:
+  - test
+  - review
+
+variables:
+  DANGER_GITLAB_API_TOKEN: "XXXXXXXX"
+  DANGER_GITLAB_HOST: "git.example.com"
+  DANGER_GITLAB_API_BASE_URL: "https://git.example.com/api/v4"
+
+before_script:
+  - export PULL_REQUEST_ID=$(git ls-remote -q origin merge-requests\*\head | grep $CI_COMMIT_SHA | sed 's/.*refs\/merge-requests\/\([0-9]*\)\/head/\1/g')
+  - export PR_BRANCH=$(curl -s "https://git.example.com/api/v4/projects/${CI_PROJECT_ID}/merge_requests?private_token=${OAUTH_TOKEN}&state=opened" | jq -r ".[]|select(.sha == \"$CI_COMMIT_SHA\")|.source_branch")
+  - export PR_ID=$(curl -s "https://git.example.com/api/v4/projects/${CI_PROJECT_ID}/merge_requests?private_token=${OAUTH_TOKEN}&state=opened" | jq -r ".[]|select(.sha == \"$CI_COMMIT_SHA\")|.iid")
+  - export CI_MERGE_REQUEST_ID=$(curl -s "https://git.example.com/api/v4/projects/${CI_PROJECT_ID}/merge_requests?private_token=${OAUTH_TOKEN}&state=opened" | jq -r ".[]|select(.sha == \"$CI_COMMIT_SHA\")|.iid")
+
+test-sim:
+  stage: test
+  script:
+    - pod install
+    - xcodebuild clean -workspace MyApp.xcworkspace -scheme MyApp
+    - xcodebuild test -workspace MyApp.xcworkspace -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 7,OS=10.3.1'
+  tags:
+    - ios
+
+danger:
+  stage: review
+  script:
+    - bundle install
+    - bundle exec danger --verbose
+  tags:
+    - ios

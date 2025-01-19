@@ -1,0 +1,89 @@
+- name: terraform
+  aws_credentials_params: &tf-aws-credentials-params
+    AWS_ACCESS_KEY_ID: ((aws_access_key_id))
+    AWS_SECRET_ACCESS_KEY: ((aws_secret_access_key))
+    AWS_DEFAULT_REGION: *aws_region
+  common_backend_params: &tf-common-backend-params
+    TF_BACKEND_TYPE: s3
+    TF_BACKEND_CONFIG_access_key: ((aws_access_key_id))
+    TF_BACKEND_CONFIG_secret_key: ((aws_secret_access_key))
+    TF_BACKEND_CONFIG_bucket: *aws_bucket_name
+    TF_BACKEND_CONFIG_region: *aws_region
+    TF_BACKEND_CONFIG_encrypt: true
+    TF_BACKEND_CONFIG_acl: bucket-owner-full-control
+  consul_cluster_plan_params: &tf-consul-cluster-plan-params
+    TF_WORKING_DIR: terraform-source-dir/terraform/consul/cluster
+    TF_BACKEND_CONFIG_key: *consul_cluster_backend_config_key
+    TF_VAR_aws_bucket_name: *aws_bucket_name
+    TF_VAR_aws_region: *aws_region
+    TF_VAR_ami_id: ((consul_cluster_ami_id))
+    TF_VAR_vpc_id: *consul_cluster_vpc_id
+    TF_VAR_subnet_ids: *consul_cluster_subnet_ids
+    TF_VAR_datadog_api_key: ((datadog_api_key))
+    TF_VAR_environment_name: ((environment_name))
+    TF_VAR_environment_type: *environment_type
+    TF_VAR_gossip_encryption_key: ((consul_gossip_encryption_key))
+  consul_monitors_plan_params: &tf-consul-monitors-plan-params
+    TF_WORKING_DIR: terraform-source-dir/terraform/consul/monitors
+    TF_BACKEND_CONFIG_key: *consul_monitors_backend_config_key
+    TF_VAR_cluster_backend_bucket: *aws_bucket_name
+    TF_VAR_cluster_backend_key: *consul_cluster_backend_config_key
+    TF_VAR_cluster_backend_region: *aws_region
+    TF_VAR_datadog_api_key: ((datadog_api_key))
+    TF_VAR_datadog_app_key: ((datadog_app_key))
+    TF_VAR_datadog_alert_targets: ((datadog_alert_targets))
+    TF_VAR_datadog_critical_alert_targets: ((datadog_critical_alert_targets))
+    TF_VAR_pagerduty_token: ((pagerduty_token))
+  vault_storage_plan_params: &tf-vault-storage-plan-params
+    TF_WORKING_DIR: terraform-source-dir/terraform/vault/storage
+    TF_BACKEND_CONFIG_key: *vault_storage_backend_config_key
+    TF_VAR_aws_region: *aws_region
+    TF_VAR_environment_name: ((environment_name))
+    TF_VAR_environment_type: *environment_type
+  vault_cluster_plan_params: &tf-vault-cluster-plan-params
+    TF_WORKING_DIR: terraform-source-dir/terraform/vault/cluster
+    TF_BACKEND_CONFIG_key: *vault_cluster_backend_config_key
+    TF_VAR_ami_id: ((vault_cluster_ami_id))
+    TF_VAR_aws_bucket_name: *aws_bucket_name
+    TF_VAR_aws_region: *aws_region
+    TF_VAR_environment_name: ((environment_name))
+    TF_VAR_environment_type: *environment_type
+    TF_VAR_datadog_api_key: ((datadog_api_key))
+    TF_VAR_kms_key_name: *vault_cluster_key_alias_name
+    TF_VAR_storage_backend_bucket: *aws_bucket_name
+    TF_VAR_storage_backend_key: *vault_storage_backend_config_key
+    TF_VAR_storage_backend_region: *aws_region
+    TF_VAR_subnet_ids: *vault_cluster_subnet_ids
+    TF_VAR_vpc_id: *vault_cluster_vpc_id
+  vault_monitors_plan_params: &tf-vault-monitors-plan-params
+    TF_WORKING_DIR: terraform-source-dir/terraform/vault/monitors
+    TF_BACKEND_CONFIG_key: *vault_monitors_backend_config_key
+    TF_VAR_cluster_backend_bucket: *aws_bucket_name
+    TF_VAR_cluster_backend_key: *vault_cluster_backend_config_key
+    TF_VAR_cluster_backend_region: *aws_region
+    TF_VAR_datadog_api_key: ((datadog_api_key))
+    TF_VAR_datadog_app_key: ((datadog_app_key))
+    TF_VAR_datadog_alert_targets: ((datadog_alert_targets))
+    TF_VAR_datadog_critical_alert_targets: ((datadog_critical_alert_targets))
+    TF_VAR_pagerduty_token: ((pagerduty_token))
+these get merged into the task jobs e.g.:
+
+# plan-consul-cluster
+# ===================
+- name: plan-consul-cluster
+  serial_groups: [terraform]
+  plan:
+  - aggregate:
+    - get: source
+    - get: concourse-terraform
+    - get: concourse-terraform-image
+  - task: plan
+    image: concourse-terraform-image
+    file: concourse-terraform/tasks/plan.yaml
+    input_mapping:
+      terraform-source-dir: source
+    params:
+      <<: *tf-aws-credentials-params
+      <<: *tf-common-backend-params
+      <<: *tf-consul-cluster-plan-params
+      ERROR_ON_NO_CHANGES: false
